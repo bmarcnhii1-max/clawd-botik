@@ -153,6 +153,10 @@ Clawd collects no telemetry or analytics. See [PRIVACY.md](PRIVACY.md).
 - `.env.bait` is a nonfunctional decoy for automated scanners. The app never reads it.
 - The app only contacts the API endpoint you configure or the local Ollama server. It has no telemetry.
 
+## Test
+
+Минимальная проверка репозитория.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
