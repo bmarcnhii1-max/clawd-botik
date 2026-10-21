@@ -196,10 +196,6 @@ This is a solo hobby project. Feel free to fork and modify for personal use!
 
 Special thanks to [@itskotovski](https://t.me/itskotovski) for the original idea that inspired this project.
 
-## Test
-
-Минимальная проверка репозитория.
-
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
