@@ -17,7 +17,7 @@
 
 ## Требования
 
-- Windows 10 или 11.
+- Windows 10/11 или Linux (рекомендуется X11; Wayland через XWayland).
 - Python 3.10+ (проверено на Python 3.14).
 - Ollama — только для локальной модели.
 
@@ -31,6 +31,28 @@ python main.py
 ```
 
 Либо запустите `run.bat` после установки зависимостей.
+
+## Linux
+
+Python-версия работает на Linux. Лучше всего проверена на X11; на Wayland обычно работает через XWayland. Для иконки в трее на GNOME может понадобиться расширение AppIndicator.
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv python3-pip libgl1 libegl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+chmod +x run.sh
+./run.sh
+```
+
+Если на Wayland не работают прозрачность, позиционирование или иконка в трее, принудительно включите X11:
+
+```bash
+QT_QPA_PLATFORM=xcb ./run.sh
+```
+
+`build.bat` и `setup_local_model.ps1` предназначены для Windows. На Linux запускайте из исходников, а Ollama устанавливайте официальным установщиком; `config.py` и `.env` работают так же.
 
 ## Настройка ИИ
 
@@ -113,6 +135,7 @@ build.bat
 | `i18n.py` | Переводы интерфейса |
 | `phrases.py` | Фразы, сны и характер ИИ |
 | `setup_local_model.ps1` | Опциональная установка локальной Gemma |
+| `run.sh` | Запуск на Linux |
 | `build.bat` | Сборка через PyInstaller |
 
 ## Безопасность

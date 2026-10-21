@@ -17,7 +17,7 @@ A tiny pixel pet for Windows. It lives on your desktop, walks around, reacts to 
 
 ## Requirements
 
-- Windows 10 or 11.
+- Windows 10/11 or Linux (X11 recommended; Wayland via XWayland).
 - Python 3.10+ (tested with Python 3.14).
 - Ollama only if you want the local model.
 
@@ -31,6 +31,28 @@ python main.py
 ```
 
 Or run `run.bat` after installing the dependencies.
+
+## Linux
+
+The Python version runs on Linux. X11 is the best-tested setup; Wayland usually works through XWayland. The tray icon may require an AppIndicator extension on GNOME.
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv python3-pip libgl1 libegl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+chmod +x run.sh
+./run.sh
+```
+
+If transparency, window positioning, or the tray icon misbehave on Wayland, force X11:
+
+```bash
+QT_QPA_PLATFORM=xcb ./run.sh
+```
+
+`build.bat` and `setup_local_model.ps1` are Windows-only. On Linux, run from source and install Ollama with its official installer; `config.py` and `.env` work the same way.
 
 ## AI setup
 
@@ -113,6 +135,7 @@ For faster local iterations, use `build.bat fast`. It keeps the PyInstaller cach
 | `i18n.py` | UI translations |
 | `phrases.py` | Speech, dreams, and AI personas |
 | `setup_local_model.ps1` | Optional local Gemma setup |
+| `run.sh` | Linux launcher |
 | `build.bat` | PyInstaller build script |
 
 ## Security
