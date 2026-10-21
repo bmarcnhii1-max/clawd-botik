@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="README.md"><strong>English</strong></a> | 
+  <a href="README.uk.md"><strong>Українська</strong></a> | 
+  <a href="README.ru.md"><strong>Русский</strong></a>
+</p>
+
 # Clawd — Desktop AI Pet
 
 A delightful pixel pet for your Windows or Linux desktop. Watch it walk, sleep, and dream. Interact with it through clicks and drags. Chat with it using any OpenAI-compatible AI API or a local Ollama model.
