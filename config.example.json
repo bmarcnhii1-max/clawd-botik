@@ -1,0 +1,22 @@
+{
+  "ai_enabled": true,
+  "ai_mode": "cloud",
+  "ai_base_url": "https://api.example.com/v1",
+  "ai_key": "",
+  "ai_model": "model-name",
+  "ai_local_base_url": "http://127.0.0.1:11434/v1",
+  "ai_local_key": "ollama",
+  "ai_local_model": "gemma4-e2b-local",
+  "ai_persona": "",
+  "ai_timeout": 120,
+  "size": 1,
+  "color": 0,
+  "gravity": false,
+  "wander": true,
+  "phrases": true,
+  "lang": "en",
+  "sleep_seconds": 180,
+  "always_on_top": true,
+  "pos_x": null,
+  "pos_y": null
+}

@@ -1,0 +1,4 @@
+FROM ./models/gemma-4-E2B-it-Q4_K_M.gguf
+PARAMETER temperature 0.9
+PARAMETER top_p 0.95
+PARAMETER num_ctx 8192

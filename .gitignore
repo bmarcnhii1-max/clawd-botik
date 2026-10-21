@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+config.json
+.env
+models/
+build/
+dist/
+*.spec
+clawd.ico
+clawd-icon.png
+*.log
+.pytest_cache/
+
