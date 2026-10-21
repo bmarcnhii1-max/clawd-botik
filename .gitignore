@@ -12,4 +12,8 @@ clawd.ico
 clawd-icon.png
 *.log
 .pytest_cache/
+*.pfx
+*.p12
+*.key
+*.cer
 

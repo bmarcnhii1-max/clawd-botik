@@ -138,6 +138,14 @@ build.bat
 | `run.sh` | Запуск на Linux |
 | `build.bat` | Сборка через PyInstaller |
 
+## Политика подписи кода
+
+Clawd подаёт заявку в SignPath Foundation на бесплатную подпись Windows-релизов. После одобрения exe, собранные в GitHub Actions, будут подписываться через SignPath.io сертификатом SignPath Foundation. Подробнее: [CODE_SIGNING.md](CODE_SIGNING.md).
+
+## Конфиденциальность
+
+Clawd не собирает телеметрию и аналитику. Подробнее: [PRIVACY.md](PRIVACY.md).
+
 ## Безопасность
 
 - Не коммитьте `config.json`, `.env`, API-ключи, скачанные модели и результаты сборки.

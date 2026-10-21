@@ -138,6 +138,14 @@ For faster local iterations, use `build.bat fast`. It keeps the PyInstaller cach
 | `run.sh` | Linux launcher |
 | `build.bat` | PyInstaller build script |
 
+## Code signing policy
+
+Clawd is applying to the SignPath Foundation for free code signing of Windows release binaries. After approval, release executables built by GitHub Actions will be signed through SignPath.io with a certificate issued to SignPath Foundation. See [CODE_SIGNING.md](CODE_SIGNING.md).
+
+## Privacy
+
+Clawd collects no telemetry or analytics. See [PRIVACY.md](PRIVACY.md).
+
 ## Security
 
 - Never commit `config.json`, `.env`, API keys, downloaded models, or build outputs.
