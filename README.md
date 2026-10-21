@@ -119,6 +119,7 @@ For faster local iterations, use `build.bat fast`. It keeps the PyInstaller cach
 
 - Never commit `config.json`, `.env`, API keys, downloaded models, or build outputs.
 - If a credential was ever committed or shared, revoke it and create a new one.
+- `.env.bait` is a nonfunctional decoy for automated scanners. The app never reads it.
 - The app only contacts the API endpoint you configure or the local Ollama server. It has no telemetry.
 
 ## License
