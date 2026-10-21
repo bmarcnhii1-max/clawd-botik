@@ -192,6 +192,10 @@ Clawd is applying to the SignPath Foundation for free code signing of Windows re
 
 This is a solo hobby project. Feel free to fork and modify for personal use!
 
+## Credits
+
+Special thanks to [@itskotovski](https://t.me/itskotovski) for the original idea that inspired this project.
+
 ## Test
 
 Минимальная проверка репозитория.
