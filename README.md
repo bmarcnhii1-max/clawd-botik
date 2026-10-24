@@ -126,6 +126,7 @@ Then set `ai_local_model` to `gemma4:e2b` in `config.json`, and select **AI mode
 | Action | Effect |
 |--------|--------|
 | **Left click** | Tap or pet the pet |
+| **Triple left click** | Open the AI chat |
 | **Drag** | Move the pet around the screen |
 | **Drag + throw** | Flick the pet to make it fly |
 | **Drag + shake** | Cycle through languages: English → Russian → Ukrainian |

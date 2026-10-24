@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
@@ -131,7 +133,7 @@ class PetSettingsDialog(QDialog):
         self.size_combo = QComboBox(self)
         self.size_combo.addItems(self.t["sizes"])
         size_index = int(config.get("size", 1))
-        self.size_combo.setCurrentIndex(size_index if 0 <= size_index < len(sprite.SIZE_ITEMS) else 1)
+        self.size_combo.setCurrentIndex(size_index if 0 <= size_index < len(sprite.SIZE_UNITS) else 1)
 
         self.color_combo = QComboBox(self)
         for index, (_name, body, _eye) in enumerate(sprite.PALETTES):
@@ -214,15 +216,20 @@ class AISettingsDialog(QDialog):
         self.enabled_box.setChecked(bool(config.get("ai_enabled", True)))
         self.url_edit = QLineEdit(str(config.get("ai_base_url", "")))
         self.url_edit.setPlaceholderText("https://api.example.com/v1")
-        self.key_edit = QLineEdit(str(config.get("ai_key", "")))
+        self._env_key = "ai_key" in getattr(config, "env_overrides", ())
+        self.key_edit = QLineEdit("")
         self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.key_edit.setPlaceholderText("sk-…")
+        if self._env_key:
+            self.key_edit.setPlaceholderText(self.t["key_from_env"])
+        else:
+            self.key_edit.setText(str(config.get("ai_key", "")))
+            self.key_edit.setPlaceholderText("sk-…")
         self.model_edit = QLineEdit(str(config.get("ai_model", "")))
         self.model_edit.setPlaceholderText("model-name")
         self.timeout_spin = QSpinBox(self)
         self.timeout_spin.setRange(10, 600)
         self.timeout_spin.setSingleStep(10)
-        self.timeout_spin.setSuffix(" с")
+        self.timeout_spin.setSuffix(self.t["timeout_suffix"])
         self.timeout_spin.setValue(int(config.get("ai_timeout", 120) or 120))
         self.persona_edit = QPlainTextEdit(str(config.get("ai_persona", "")))
         self.persona_edit.setPlaceholderText(self.t["persona_hint"])
@@ -236,6 +243,13 @@ class AISettingsDialog(QDialog):
         form.addRow(self.t["persona"], self.persona_edit)
         layout.addLayout(form)
 
+        self.url_warning = QLabel(self)
+        self.url_warning.setWordWrap(True)
+        self.url_warning.setStyleSheet("color: #e0b35a;")
+        layout.addWidget(self.url_warning)
+        self.url_edit.textChanged.connect(self._update_url_warning)
+        self._update_url_warning()
+
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel_button = QPushButton(self.t["cancel"], self)
@@ -248,10 +262,42 @@ class AISettingsDialog(QDialog):
         cancel_button.clicked.connect(self.reject)
         save_button.clicked.connect(self.accept)
 
+    def _update_url_warning(self):
+        url = self.url_edit.text().strip()
+        insecure = False
+        if url:
+            try:
+                parts = urlsplit(url)
+                host = (parts.hostname or "").lower()
+                insecure = (
+                    parts.scheme == "http"
+                    and host not in ("localhost", "127.0.0.1", "::1", "0.0.0.0")
+                    and not host.startswith("127.")
+                )
+            except ValueError:
+                insecure = False
+        self.url_warning.setText(self.t["insecure_url"] if insecure else "")
+        self.url_warning.setVisible(insecure)
+
+    def _set_value(self, key, value):
+        setter = getattr(self.config, "set_user_value", None)
+        if callable(setter):
+            setter(key, value)
+        else:
+            self.config[key] = value
+
+    def _set_if_changed(self, key, value):
+        if str(self.config.get(key, "")) != str(value):
+            self._set_value(key, value)
+
     def apply_to_config(self):
-        self.config["ai_enabled"] = bool(self.enabled_box.isChecked())
-        self.config["ai_base_url"] = self.url_edit.text().strip()
-        self.config["ai_key"] = self.key_edit.text().strip()
-        self.config["ai_model"] = self.model_edit.text().strip()
-        self.config["ai_timeout"] = int(self.timeout_spin.value())
-        self.config["ai_persona"] = self.persona_edit.toPlainText().strip()
+        self._set_value("ai_enabled", bool(self.enabled_box.isChecked()))
+        self._set_if_changed("ai_base_url", self.url_edit.text().strip())
+        key = self.key_edit.text().strip()
+        if key:
+            self._set_value("ai_key", key)
+        elif not self._env_key:
+            self._set_if_changed("ai_key", "")
+        self._set_if_changed("ai_model", self.model_edit.text().strip())
+        self._set_value("ai_timeout", int(self.timeout_spin.value()))
+        self._set_value("ai_persona", self.persona_edit.toPlainText().strip())

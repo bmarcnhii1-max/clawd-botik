@@ -9,6 +9,7 @@
   "ai_local_model": "gemma4-e2b-local",
   "ai_persona": "",
   "ai_timeout": 120,
+  "ai_max_tokens": 220,
   "size": 1,
   "color": 0,
   "gravity": false,
@@ -16,7 +17,6 @@
   "phrases": true,
   "lang": "en",
   "sleep_seconds": 180,
-  "always_on_top": true,
   "pos_x": null,
   "pos_y": null
 }

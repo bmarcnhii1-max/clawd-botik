@@ -200,10 +200,17 @@ def main():
             action.blockSignals(True)
             action.setChecked(mode == action_mode)
             action.blockSignals(False)
-        for action, key in ((gravity_action, "gravity"), (wander_action, "wander"), (phrases_action, "phrases")):
+        for action, key, default in (
+            (gravity_action, "gravity", False),
+            (wander_action, "wander", True),
+            (phrases_action, "phrases", True),
+        ):
             action.blockSignals(True)
-            action.setChecked(bool(config.get(key, True)))
+            action.setChecked(bool(config.get(key, default)))
             action.blockSignals(False)
+        show_action.blockSignals(True)
+        show_action.setChecked(pet.isVisible())
+        show_action.blockSignals(False)
 
     def set_size(index):
         config["size"] = index
@@ -242,11 +249,14 @@ def main():
 
     def toggle_visible(checked):
         if checked:
-            pet.show()
-            pet.raise_()
-        else:
-            pet.bubble.hide()
-            pet.hide()
+            pet.show_pet()
+            return
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            show_action.blockSignals(True)
+            show_action.setChecked(True)
+            show_action.blockSignals(False)
+            return
+        pet.hide()
 
     def set_gravity(checked):
         config["gravity"] = bool(checked)
@@ -293,17 +303,32 @@ def main():
     def show_context_menu(pos):
         QTimer.singleShot(0, lambda: menu.exec(pos))
 
+    def sync_visibility(visible):
+        show_action.blockSignals(True)
+        show_action.setChecked(bool(visible))
+        show_action.blockSignals(False)
+
+    def show_notification(text):
+        if QSystemTrayIcon.supportsMessages():
+            tray.showMessage(
+                "Clawd",
+                str(text)[:300],
+                QSystemTrayIcon.MessageIcon.Information,
+                4000,
+            )
+
     pet.context_callback = show_context_menu
     pet.language_callback = lambda code: sync_menu()
+    pet.visibility_callback = sync_visibility
+    pet.notify_callback = show_notification
 
     def activate_instance():
         while server.hasPendingConnections():
             connection = server.nextPendingConnection()
             if connection is not None:
                 connection.deleteLater()
-        show_action.setChecked(True)
-        pet.show()
-        pet.raise_()
+        pet.show_pet()
+        sync_visibility(True)
 
     server.newConnection.connect(activate_instance)
     if server.hasPendingConnections():

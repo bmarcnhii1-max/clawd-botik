@@ -1,5 +1,12 @@
-from PySide6.QtCore import QRect, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QPainter,
+    QPen,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtWidgets import QWidget
 
 
@@ -28,6 +35,7 @@ class BubbleWindow(QWidget):
         self._text = ""
         self._font = QFont("Segoe UI", 10)
         self._font.setBold(True)
+        self._layout = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.hide)
@@ -44,12 +52,30 @@ class BubbleWindow(QWidget):
         self.update()
 
     def _resize_to_text(self):
-        metrics = QFontMetrics(self._font)
-        flags = int(Qt.TextFlag.TextWordWrap) | int(Qt.AlignmentFlag.AlignLeft)
-        rect = metrics.boundingRect(QRect(0, 0, self.MAX_TEXT_WIDTH, 2000), flags, self._text)
-        width = rect.width() + self.PADDING_X * 2 + 4
-        height = rect.height() + self.PADDING_Y * 2 + 4
-        self.setFixedSize(max(70, width), max(36, height))
+        layout = QTextLayout(self._text, self._font)
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        layout.setTextOption(option)
+        layout.beginLayout()
+        width = max(1.0, float(self.MAX_TEXT_WIDTH - self.PADDING_X * 2))
+        y = 0.0
+        max_width = 0.0
+        while True:
+            line = layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(width)
+            line.setPosition(QPointF(0.0, y))
+            max_width = max(max_width, line.naturalTextWidth())
+            y += line.height()
+        layout.endLayout()
+        self._layout = layout
+        bubble_width = int(max_width) + self.PADDING_X * 2 + 6
+        bubble_height = int(y) + self.PADDING_Y * 2 + 4
+        self.setFixedSize(
+            max(70, min(self.MAX_TEXT_WIDTH + self.PADDING_X * 2 + 6, bubble_width)),
+            max(36, bubble_height),
+        )
 
     def place_near(self, pet_rect, screen_rect):
         width = self.width()
@@ -70,14 +96,8 @@ class BubbleWindow(QWidget):
         painter.setBrush(QColor(28, 28, 30, 235))
         painter.setPen(QPen(QColor(255, 255, 255, 45), 1.0))
         painter.drawRoundedRect(rect, 12.0, 12.0)
-        painter.setPen(QColor(245, 245, 245))
-        painter.setFont(self._font)
-        text_rect = QRect(
-            self.PADDING_X,
-            self.PADDING_Y,
-            self.width() - self.PADDING_X * 2,
-            self.height() - self.PADDING_Y * 2,
-        )
-        flags = int(Qt.TextFlag.TextWordWrap) | int(Qt.AlignmentFlag.AlignLeft) | int(Qt.AlignmentFlag.AlignVCenter)
-        painter.drawText(text_rect, flags, self._text)
+        if self._layout is not None:
+            painter.setPen(QColor(245, 245, 245))
+            painter.setFont(self._font)
+            self._layout.draw(painter, QPointF(self.PADDING_X, self.PADDING_Y + 2))
         painter.end()

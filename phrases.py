@@ -148,8 +148,6 @@ DEFAULT_PERSONA_EN = (
     "(1–2 sentences) in English, without markdown."
 )
 
-LANGUAGES = [("ru", "Русский"), ("uk", "Українська"), ("en", "English")]
-
 
 def get_phrases(lang):
     if str(lang) == "uk":

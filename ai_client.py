@@ -1,10 +1,21 @@
 import re
 import threading
+from urllib.parse import urlsplit
 
 import requests
 from PySide6.QtCore import QObject, Signal
 
 from i18n import ui
+
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+def _is_loopback(base_url):
+    try:
+        host = (urlsplit(str(base_url)).hostname or "").lower()
+    except ValueError:
+        return False
+    return host in _LOOPBACK_HOSTS or host.startswith("127.")
 
 
 class AIClient(QObject):
@@ -32,7 +43,7 @@ class AIClient(QObject):
 
     def ready(self):
         base, key, model, _ = self.active_settings(self.config)
-        return bool(self.config.get("ai_enabled") and base and key and model)
+        return bool(self.config.get("ai_enabled") and base and model and (key or _is_loopback(base)))
 
     def ask(self, messages, max_tokens=220):
         if not self.ready():
@@ -50,14 +61,14 @@ class AIClient(QObject):
         error = ""
         t = ui(cfg.get("lang", "ru"))
         local = str(cfg.get("ai_mode", "cloud")).lower() == "local"
+        base = ""
         try:
             base, key, model, local = self.active_settings(cfg)
             url = base + "/chat/completions"
-            headers = {
-                "Authorization": "Bearer " + key,
-                "X-API-Key": key,
-                "Content-Type": "application/json",
-            }
+            headers = {"Content-Type": "application/json"}
+            if key:
+                headers["Authorization"] = "Bearer " + key
+                headers["X-API-Key"] = key
             payload = {
                 "model": model,
                 "messages": messages,
@@ -76,7 +87,7 @@ class AIClient(QObject):
                 error = "HTTP %d: %s" % (response.status_code, str(response.text)[:150])
         except Exception as exc:
             if local and isinstance(exc, requests.exceptions.ConnectionError):
-                error = t["ai_local_down"]
+                error = t["ai_local_down"].format(base=base or "?")
             else:
                 error = type(exc).__name__ + ": " + str(exc)
         self.finished.emit(reply, error)
@@ -104,13 +115,19 @@ class AIClient(QObject):
             return None
         content = str(content).strip()
         content = re.sub(
-            r"<think\b[^>]*>.*?</think\s*>",
+            r"<(think|thinking|reasoning)\b[^>]*>.*?</(?:think|thinking|reasoning)\s*>",
             "",
             content,
             flags=re.IGNORECASE | re.DOTALL,
         ).strip()
-        if "</think" in content.lower():
-            tail = re.split(r"</think\s*>", content, flags=re.IGNORECASE)[-1].strip()
-            if tail:
-                content = tail
+        closing = re.search(r"</(?:think|thinking|reasoning)\s*>", content, flags=re.IGNORECASE)
+        if closing:
+            content = content[closing.end():].strip()
+        else:
+            content = re.sub(
+                r"</?(?:think|thinking|reasoning)\b[^>]*>",
+                "",
+                content,
+                flags=re.IGNORECASE,
+            ).strip()
         return content or None

@@ -3,7 +3,7 @@ import random
 import time
 
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QRegion
 from PySide6.QtWidgets import QApplication, QWidget
 
 import sprite
@@ -42,6 +42,8 @@ class PetWindow(QWidget):
         self.chat_callback = None
         self.context_callback = None
         self.language_callback = None
+        self.visibility_callback = None
+        self.notify_callback = None
         self.bubble = BubbleWindow()
 
         self._frames = {}
@@ -68,8 +70,6 @@ class PetWindow(QWidget):
         self._hop_active = False
         self._hop_off = 0.0
         self._hop_vy = 0.0
-        self._mouth_open_until = 0.0
-        self._chew_until = 0.0
         self._walk_target = 0.0
         self._walk_in = False
         self._next_heart = 0.0
@@ -80,6 +80,9 @@ class PetWindow(QWidget):
         self._recent_taps = []
         self._ai_history = self._load_history()
         self._pending_user = ""
+        self._ai_inflight = False
+        self._ai_queue = []
+        self._mask_key = None
         self._state = "idle"
         self._vx = 0.0
         self._vy = 0.0
@@ -113,12 +116,44 @@ class PetWindow(QWidget):
         self._pixmap = None
         self._last_wx = None
         self._last_wy = None
+        self._mask_key = None
+        self._update_mask()
+
+    def _update_mask(self):
+        pad = max(6, int(self._unit * 3.0))
+        region = QRegion(
+            self._margin - pad,
+            self._margin - pad,
+            self._sw + pad * 2,
+            self._sh + pad * 2,
+        )
+        win_x = self._x - self._margin
+        win_y = self._y + self._hop_off - self._margin
+        positions = []
+        for part in self._particles:
+            px = int((part["x"] - win_x) // 4) * 4 - 2
+            py = int((part["y"] - win_y) // 4) * 4 - 2
+            positions.append((px, py, part["pix"].width(), part["pix"].height()))
+            region = region.united(
+                QRegion(px, py, part["pix"].width() + 4, part["pix"].height() + 4)
+            )
+        key = (self.width(), self.height(), tuple(positions))
+        if key == self._mask_key:
+            return
+        self._mask_key = key
+        self.setMask(region)
 
     def _screen_geo(self):
         center = QPoint(int(self._x + self._sw / 2), int(self._y + self._sh / 2))
         screen = QApplication.screenAt(center)
         if screen is None:
             screen = self.screen() or QApplication.primaryScreen()
+        return screen.availableGeometry()
+
+    def _screen_geo_at(self, x, y):
+        screen = QApplication.screenAt(QPoint(int(x), int(y)))
+        if screen is None:
+            screen = QApplication.primaryScreen()
         return screen.availableGeometry()
 
     def _bounds(self, geo):
@@ -130,16 +165,19 @@ class PetWindow(QWidget):
         )
 
     def _restore_position(self):
-        geo = self._screen_geo()
-        min_x, max_x, min_y, max_y = self._bounds(geo)
         px = self.cfg.get("pos_x")
         py = self.cfg.get("pos_y")
         if px is None or py is None:
+            screen = QApplication.primaryScreen()
+            geo = screen.availableGeometry()
+            min_x, max_x, min_y, max_y = self._bounds(geo)
             self._x = max_x - self._unit * 3
             self._y = max_y
-        else:
-            self._x = clamp(float(px), min_x, max_x)
-            self._y = clamp(float(py), min_y, max_y)
+            return
+        geo = self._screen_geo_at(px, py)
+        min_x, max_x, min_y, max_y = self._bounds(geo)
+        self._x = clamp(float(px), min_x, max_x)
+        self._y = clamp(float(py), min_y, max_y)
 
     def _save_position(self):
         self.cfg["pos_x"] = int(self._x)
@@ -148,10 +186,20 @@ class PetWindow(QWidget):
 
     def start(self):
         self._restore_position()
+        self.show_pet()
+        QTimer.singleShot(700, self._greet)
+
+    def show_pet(self):
         self.show()
         self.raise_()
-        self._timer.start()
-        QTimer.singleShot(700, self._greet)
+
+    def _notify_visibility(self, visible):
+        if callable(self.visibility_callback):
+            self.visibility_callback(bool(visible))
+
+    def _notify(self, text):
+        if callable(self.notify_callback):
+            self.notify_callback(str(text))
 
     def _greet(self):
         if not self.isVisible():
@@ -271,7 +319,13 @@ class PetWindow(QWidget):
             self._next_blink = now + (0.35 if random.random() < 0.15 else random.uniform(2.0, 5.5))
 
         timeout = self._sleep_timeout()
-        if timeout and now - self._last_interaction > timeout and not self._hop_active and not self._walk_in:
+        if (
+            timeout
+            and now - self._last_interaction > timeout
+            and not self._hop_active
+            and not self._walk_in
+            and not self._ai_inflight
+        ):
             self._state = "sleep"
             self._look = 0
             self._next_z = now + 0.6
@@ -460,37 +514,81 @@ class PetWindow(QWidget):
         text = str(text or "").strip()
         if not text:
             return
+        text = text[:1000]
         if not self.ai.ready():
-            self._say_raw(random.choice(get_phrases(self.language())["ai_off"]), 4.0)
+            message = random.choice(get_phrases(self.language())["ai_off"])
+            if self.isVisible():
+                self._say_raw(message, 4.0)
+            else:
+                self._notify(message)
             return
+        if not self.isVisible():
+            self.show_pet()
+        if self._state == "sleep":
+            self._state = "idle"
+            self._hide_bubble()
         self._last_interaction = time.monotonic()
+        if self._ai_inflight:
+            if len(self._ai_queue) < 4:
+                self._ai_queue.append(text)
+            return
+        self._dispatch_ai(text)
+
+    def _dispatch_ai(self, text):
+        self._ai_inflight = True
+        self._pending_user = text
         self._set_expr("happy", 1.5)
-        self._say_raw(ui(self.language())["thinking"], float(self.cfg.get("ai_timeout", 120) or 120) + 5.0)
+        self._say_raw(
+            ui(self.language())["thinking"],
+            float(self.cfg.get("ai_timeout", 120) or 120) + 5.0,
+        )
         messages = [{"role": "system", "content": self._persona()}]
         messages.extend(self._ai_history[-8:])
-        messages.append({"role": "user", "content": text[:1000]})
-        self._pending_user = text[:1000]
+        messages.append({"role": "user", "content": text})
         self.ai.ask(messages, max_tokens=int(self.cfg.get("ai_max_tokens", 220)))
+
+    def _process_ai_queue(self):
+        if self._ai_inflight or not self._ai_queue:
+            return
+        if not self.ai.ready():
+            self._ai_queue.clear()
+            return
+        self._dispatch_ai(self._ai_queue.pop(0))
 
     def _persona(self):
         text = str(self.cfg.get("ai_persona", "") or "").strip()
         return text or get_default_persona(self.language())
 
     def _on_ai_finished(self, reply, error):
+        self._ai_inflight = False
+        t = ui(self.language())
+        visible = self.isVisible()
         if not reply:
-            t = ui(self.language())
-            self._say_raw(t["ai_prefix"] + str(error or t["no_reply"])[:140], 6.0)
-            return
-        if self._pending_user:
-            self._ai_history.append({"role": "user", "content": self._pending_user})
-            self._ai_history.append({"role": "assistant", "content": reply})
-            if len(self._ai_history) > 12:
-                del self._ai_history[:-12]
-            self._pending_user = ""
-            self._save_history()
-        self._set_expr("happy", 2.0)
-        self._spawn_particle("spark")
-        self._say_raw(reply[:400], clamp(3.0 + len(reply) * 0.05, 3.0, 12.0))
+            message = t["ai_prefix"] + str(error or t["no_reply"])[:140]
+            if visible:
+                self._say_raw(message, 6.0)
+            else:
+                self._notify(message)
+        else:
+            if self._pending_user:
+                self._ai_history.append({"role": "user", "content": self._pending_user})
+                self._ai_history.append({"role": "assistant", "content": reply})
+                if len(self._ai_history) > 12:
+                    del self._ai_history[:-12]
+                self._save_history()
+            self._set_expr("happy", 2.0)
+            self._spawn_particle("spark")
+            if visible:
+                self._say_raw(reply[:400], clamp(3.0 + len(reply) * 0.05, 3.0, 12.0))
+            else:
+                self._notify(reply[:400])
+        self._pending_user = ""
+        if self._ai_queue:
+            if reply:
+                delay = clamp(3.0 + len(reply) * 0.05, 2.5, 8.0)
+            else:
+                delay = 2.5
+            QTimer.singleShot(int(delay * 1000), self._process_ai_queue)
 
     def _load_history(self):
         raw = self.cfg.get("ai_history")
@@ -513,6 +611,7 @@ class PetWindow(QWidget):
     def clear_history(self):
         self._ai_history = []
         self._pending_user = ""
+        self._ai_queue.clear()
         self.cfg["ai_history"] = []
         save_config(self.cfg)
         self._set_expr("happy", 1.2)
@@ -520,7 +619,7 @@ class PetWindow(QWidget):
         self._say_raw(ui(self.language())["history_cleared"], 2.5)
 
     def _say(self, category):
-        if not self.cfg.get("phrases", True):
+        if not self.cfg.get("phrases", True) or self._ai_inflight:
             return
         options = get_phrases(self.language()).get(category)
         if not options:
@@ -528,7 +627,7 @@ class PetWindow(QWidget):
         self._say_raw(random.choice(options))
 
     def _dream(self):
-        if not self.cfg.get("phrases", True):
+        if not self.cfg.get("phrases", True) or self._ai_inflight:
             return
         options = get_phrases(self.language()).get("dream") or []
         if not options:
@@ -670,11 +769,6 @@ class PetWindow(QWidget):
             eyes = "blink"
         if legs == "tuck" and squash:
             squash = 0
-        if state != "sleep":
-            if now < self._mouth_open_until:
-                mouth = "open"
-            elif now < self._chew_until and int(now * 6) % 2:
-                mouth = "chew"
         return (eyes, look, arms, legs, squash, blush, mouth)
 
     def _rotation_value(self):
@@ -701,6 +795,7 @@ class PetWindow(QWidget):
             self.move(wx, wy)
             self._last_wx = wx
             self._last_wy = wy
+        self._update_mask()
         if self.bubble.isVisible():
             self._update_bubble_position()
         self.update()
@@ -868,8 +963,17 @@ class PetWindow(QWidget):
             self._next_action = now + random.uniform(2.0, 5.0)
             self._save_position()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._timer.isActive():
+            self._last_tick = time.monotonic()
+            self._timer.start()
+        self._notify_visibility(True)
+
     def hideEvent(self, event):
         self._hide_bubble()
+        self._timer.stop()
+        self._notify_visibility(False)
         super().hideEvent(event)
 
     def closeEvent(self, event):

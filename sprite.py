@@ -4,7 +4,6 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 GRID_W = 18
 GRID_H = 13
 
-SIZE_ITEMS = ["Маленький", "Средний", "Большой"]
 SIZE_UNITS = [6, 8, 10]
 
 PALETTES = [
@@ -19,15 +18,11 @@ PALETTES = [
 HEART_COLOR = 0xFFFF5C7A
 ZZZ_COLOR = 0xFF8FA3BF
 SPARK_COLOR = 0xFFFFC94D
-NOTE_COLOR = 0xFF6FB8FF
-
-POOP_COLORS = {"X": 0xFF8A5A33, "o": 0xFFB27D4E, "w": 0xFFFFFFFF, "k": 0xFF1A1A1A}
 
 PARTICLE_COLORS = {
     "heart": HEART_COLOR,
     "zzz": ZZZ_COLOR,
     "spark": SPARK_COLOR,
-    "note": NOTE_COLOR,
 }
 
 PATTERNS = {
@@ -52,23 +47,6 @@ PATTERNS = {
         "XX.XX",
         "..X..",
         "..X..",
-    ),
-    "note": (
-        "..XXXXX",
-        "..X...X",
-        "..X...X",
-        "..X...X",
-        "XXX.XXX",
-        "XXX.XXX",
-    ),
-    "poop": (
-        "....X....",
-        "...XXo...",
-        "..XXXXX..",
-        ".XXXXXXo.",
-        ".XwkXwkX.",
-        "XXXXXXXXo",
-        "XXXXXXXXX",
     ),
 }
 
@@ -200,12 +178,8 @@ def render_frame(key, unit, body_color, eye_color):
 
 def particle_pixmap(kind, unit):
     rows = PATTERNS[kind]
-    if kind == "poop":
-        colors = POOP_COLORS
-        scale = max(2, int(unit * 0.9))
-    else:
-        colors = {"X": PARTICLE_COLORS[kind]}
-        scale = max(2, int(unit * 0.75))
+    color = PARTICLE_COLORS[kind]
+    scale = max(2, int(unit * 0.75))
     width = len(rows[0]) * scale
     height = len(rows) * scale
     image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
@@ -213,8 +187,7 @@ def particle_pixmap(kind, unit):
     painter = QPainter(image)
     for y, row in enumerate(rows):
         for x, char in enumerate(row):
-            color = colors.get(char)
-            if color is not None:
+            if char == "X":
                 painter.fillRect(x * scale, y * scale, scale, scale, _qc(color))
     painter.end()
     return QPixmap.fromImage(image)
