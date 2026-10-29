@@ -44,7 +44,7 @@ ENV_KEYS = {
     "ai_model": "CLAWD_AI_MODEL",
 }
 
-MAX_SIZE_INDEX = 2
+MAX_SIZE_INDEX = 3
 MAX_COLOR_INDEX = 5
 LANGUAGES = ("ru", "uk", "en")
 AI_MODES = ("cloud", "local")

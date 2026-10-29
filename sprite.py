@@ -4,7 +4,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 GRID_W = 18
 GRID_H = 13
 
-SIZE_UNITS = [6, 8, 10]
+SIZE_UNITS = [6, 8, 10, 4]
 
 PALETTES = [
     ("Claude", 0xFFD97757, 0xFF1A1A1A),
