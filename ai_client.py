@@ -56,14 +56,31 @@ class AIClient(QObject):
             daemon=True,
         ).start()
 
+    @staticmethod
+    def _cloud_settings(cfg):
+        base = str(cfg.get("ai_base_url", "")).strip().rstrip("/")
+        key = str(cfg.get("ai_key", "")).strip()
+        model = str(cfg.get("ai_model", "")).strip()
+        if base and key and model:
+            return base, key, model
+        return None
+
     def _worker(self, cfg, messages, max_tokens):
-        reply = ""
-        error = ""
         t = ui(cfg.get("lang", "ru"))
         local = str(cfg.get("ai_mode", "cloud")).lower() == "local"
-        base = ""
+        base, key, model, _ = self.active_settings(cfg)
+        reply, error, conn_failed = self._attempt(base, key, model, local, messages, max_tokens, cfg, t)
+        if local and conn_failed and not reply:
+            cloud = self._cloud_settings(cfg)
+            if cloud is not None:
+                reply, error, _ = self._attempt(cloud[0], cloud[1], cloud[2], False, messages, max_tokens, cfg, t)
+        self.finished.emit(reply, error)
+
+    def _attempt(self, base, key, model, local, messages, max_tokens, cfg, t):
+        reply = ""
+        error = ""
+        conn_failed = False
         try:
-            base, key, model, local = self.active_settings(cfg)
             url = base + "/chat/completions"
             headers = {"Content-Type": "application/json"}
             if key:
@@ -86,11 +103,15 @@ class AIClient(QObject):
             else:
                 error = "HTTP %d: %s" % (response.status_code, str(response.text)[:150])
         except Exception as exc:
-            if local and isinstance(exc, requests.exceptions.ConnectionError):
-                error = t["ai_local_down"].format(base=base or "?")
+            if isinstance(exc, requests.exceptions.ConnectionError):
+                conn_failed = True
+                if local:
+                    error = t["ai_local_down"].format(base=base or "?")
+                else:
+                    error = type(exc).__name__ + ": " + str(exc)
             else:
                 error = type(exc).__name__ + ": " + str(exc)
-        self.finished.emit(reply, error)
+        return reply, error, conn_failed
 
     @staticmethod
     def _extract(data):

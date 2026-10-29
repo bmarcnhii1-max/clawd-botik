@@ -214,6 +214,8 @@ class AISettingsDialog(QDialog):
         form = QFormLayout()
         self.enabled_box = QCheckBox(self.t["ai_enabled"])
         self.enabled_box.setChecked(bool(config.get("ai_enabled", True)))
+        self.thoughts_box = QCheckBox(self.t["ai_thoughts"])
+        self.thoughts_box.setChecked(bool(config.get("ai_thoughts", True)))
         self.url_edit = QLineEdit(str(config.get("ai_base_url", "")))
         self.url_edit.setPlaceholderText("https://api.example.com/v1")
         self._env_key = "ai_key" in getattr(config, "env_overrides", ())
@@ -236,6 +238,7 @@ class AISettingsDialog(QDialog):
         self.persona_edit.setFixedHeight(90)
         layout.addWidget(QLabel(self.t["ai_mode_hint"]))
         form.addRow("", self.enabled_box)
+        form.addRow("", self.thoughts_box)
         form.addRow(self.t["api_url"], self.url_edit)
         form.addRow(self.t["api_key"], self.key_edit)
         form.addRow(self.t["model"], self.model_edit)
@@ -292,6 +295,7 @@ class AISettingsDialog(QDialog):
 
     def apply_to_config(self):
         self._set_value("ai_enabled", bool(self.enabled_box.isChecked()))
+        self._set_value("ai_thoughts", bool(self.thoughts_box.isChecked()))
         self._set_if_changed("ai_base_url", self.url_edit.text().strip())
         key = self.key_edit.text().strip()
         if key:

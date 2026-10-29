@@ -62,6 +62,9 @@ class PetWindow(QWidget):
         self._blink_until = 0.0
         self._next_z = 0.0
         self._next_dream = 0.0
+        self._next_thought = 0.0
+        self._thought_out = False
+        self._last_ai_reply = 0.0
         self._look = 0
         self._expr = None
         self._expr_until = 0.0
@@ -336,6 +339,7 @@ class PetWindow(QWidget):
         if now < self._next_action or self._hop_active or self._walk_in:
             return
         self._next_action = now + random.uniform(3.5, 9.0)
+        self._maybe_think_aloud(now)
 
         if not self.cfg.get("wander", True):
             self._look = random.choice((-1, 0, 1))
@@ -534,6 +538,36 @@ class PetWindow(QWidget):
             return
         self._dispatch_ai(text)
 
+    def _maybe_think_aloud(self, now):
+        if self._next_thought <= 0.0:
+            self._next_thought = now + random.uniform(1200.0, 1800.0)
+            return
+        if now < self._next_thought:
+            return
+        self._next_thought = now + random.uniform(1200.0, 2700.0)
+        if self._state != "idle":
+            return
+        if not self.cfg.get("ai_thoughts", True):
+            return
+        if not self.isVisible() or not self.ai.ready():
+            return
+        if self._ai_inflight or self._ai_queue:
+            return
+        if now - self._last_ai_reply < 600.0:
+            return
+        self._think_aloud()
+
+    def _think_aloud(self):
+        t = ui(self.language())
+        self._ai_inflight = True
+        self._thought_out = True
+        self._pending_user = ""
+        self._last_interaction = time.monotonic()
+        messages = [{"role": "system", "content": self._persona()}]
+        messages.extend(self._ai_history[-6:])
+        messages.append({"role": "user", "content": t["thought_prompt"]})
+        self.ai.ask(messages, max_tokens=90)
+
     def _dispatch_ai(self, text):
         self._ai_inflight = True
         self._pending_user = text
@@ -561,16 +595,26 @@ class PetWindow(QWidget):
 
     def _on_ai_finished(self, reply, error):
         self._ai_inflight = False
+        thought = self._thought_out
+        self._thought_out = False
         t = ui(self.language())
         visible = self.isVisible()
         if not reply:
+            if thought:
+                return
             message = t["ai_prefix"] + str(error or t["no_reply"])[:140]
             if visible:
                 self._say_raw(message, 6.0)
             else:
                 self._notify(message)
         else:
-            if self._pending_user:
+            self._last_ai_reply = time.monotonic()
+            if thought:
+                self._ai_history.append({"role": "assistant", "content": reply})
+                if len(self._ai_history) > 12:
+                    del self._ai_history[:-12]
+                self._save_history()
+            elif self._pending_user:
                 self._ai_history.append({"role": "user", "content": self._pending_user})
                 self._ai_history.append({"role": "assistant", "content": reply})
                 if len(self._ai_history) > 12:
