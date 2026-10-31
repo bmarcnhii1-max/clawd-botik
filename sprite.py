@@ -180,7 +180,7 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
 
     # Huge signature eyes.
     look = max(-1, min(1, int(look or 0)))
-    boxes = ((3 - widen, 3, 8, 8), (10, 3, 15 + widen, 8))
+    boxes = ((3 - widen, 3, 8, 7), (10, 3, 15 + widen, 7))
 
     def eye_rim(box):
         bx0, by0, bx1, by1 = box
@@ -190,7 +190,7 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
         bx0, by0, bx1, by1 = box
         px(bx0, by0 + dy, bx1, by1 + dy, white)
 
-    def pupils(box, py0=5, py1=7):
+    def pupils(box, py0=4, py1=6):
         bx0, _by0, bx1, _by1 = box
         qx0 = min(max(6 + look if box[0] < 9 else 10 + look, bx0), bx1 - 2)
         px(qx0, py0 + dy, qx0 + 2, py1 + dy, pupil)
@@ -198,7 +198,7 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
     if eyes in ("sleep", "blink"):
         for box in boxes:
             bx0, _by0, bx1, _by1 = box
-            px(bx0, 5 + dy, bx1, 6 + dy, pupil)
+            px(bx0, 4 + dy, bx1, 5 + dy, pupil)
     elif eyes == "happy":
         for box in boxes:
             bx0, _by0, bx1, by1 = box
@@ -210,7 +210,7 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
             eye_rim(box)
             eye_white(box)
             bx0, by0, bx1, by1 = box
-            for step in range(5):
+            for step in range(4):
                 px(bx0 + step, by0 + step + dy, bx0 + step + 1, by0 + step + 1 + dy, pupil)
                 px(bx1 - 1 - step, by0 + step + dy, bx1 - step, by0 + step + 1 + dy, pupil)
     else:
@@ -223,7 +223,7 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
             for box in boxes:
                 bx0, _by0, bx1, _by1 = box
                 cx = (bx0 + bx1) // 2
-                px(cx - 1, 5 + dy, cx + 1, 7 + dy, pupil)
+                px(cx - 1, 4 + dy, cx + 1, 6 + dy, pupil)
         else:
             for box in boxes:
                 eye_white(box)
