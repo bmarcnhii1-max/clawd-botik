@@ -79,138 +79,103 @@ def sprite_size(unit):
     return GRID_W * unit, GRID_H * unit
 
 
+OMNOM_MAP = (
+    ".........OGO......",
+    ".........OGO......",
+    "......OGGGGGGO....",
+    "...OWWWWGGWWWWO...",
+    "..OWWWWWGGWWWWWO..",
+    "..OWWWWWGGWWWWWO..",
+    "...OWWWWGGWWWWO...",
+    ".OOGGGGGGGGGGGGOO.",
+    "...OMWWMMMMMWWMO..",
+    "...OMMWWMMWWMMO...",
+    "...OggggggggggO...",
+    "....OGGO..OGGO....",
+    "....OOOO..OOOO....",
+)
+
+
 def _render_omnom_frame(key, unit, body_color, eye_color):
+    from PySide6.QtCore import Qt as _Qt
+
     eyes, look, arms, legs, squash, blush, mouth = key
     outline = 0xFF23331F
     mouth_dark = 0xFF2A4223
     white = 0xFFFFFFFF
     pupil = 0xFF1A1A1A
     shade = mix_color(body_color, 0xFF1E3A1A, 0.22)
-    width, height = sprite_size(unit)
-    image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
-    image.fill(QColor(0, 0, 0, 0))
-    painter = QPainter(image)
+    colors = {
+        "O": outline,
+        "G": body_color,
+        "g": shade,
+        "W": white,
+        "M": mouth_dark,
+    }
+    cell = QImage(18, 13, QImage.Format.Format_ARGB32_Premultiplied)
+    cell.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(cell)
+    for y, row in enumerate(OMNOM_MAP):
+        for x, char in enumerate(row):
+            color = colors.get(char)
+            if color is not None:
+                painter.fillRect(x, y, 1, 1, _qc(color))
 
-    def px(x0, y0, x1, y1, color):
-        if x1 <= x0 or y1 <= y0:
-            return
-        painter.fillRect(
-            int(x0 * unit),
-            int(y0 * unit),
-            int((x1 - x0) * unit),
-            int((y1 - y0) * unit),
-            _qc(color),
-        )
-
-    widen = 0
-    dy = 0
-    if squash > 0:
-        widen, dy = 1, 1
-    elif squash < 0:
-        widen, dy = -1, -1
-    if legs == "tuck":
-        dy += 1
-    if legs == "dangle":
-        dy -= 1
-
-    def ell(cx, cy, rx, ry, color, y_from=None, y_to=None):
-        y = cy - ry if y_from is None else max(y_from, cy - ry)
-        end_y = cy + ry if y_to is None else min(y_to, cy + ry)
-        while y < end_y - 1e-9:
-            t = (y + 0.25 - cy) / ry if ry > 0 else 0.0
-            dx = rx * (max(0.0, 1.0 - t * t) ** 0.5)
-            px(cx - dx, y + dy, cx + dx, y + 0.5 + dy, color)
-            y += 0.5
-
-    def disc(cx, cy, rx, ry, color):
-        ell(cx, cy, rx, ry, color)
-
-    # Sprout: thin stem with a small leaf leaning right.
-    px(8.2, 0.8 + dy, 9.8, 2.4 + dy, outline)
-    px(8.7, 0.8 + dy, 9.3, 2.4 + dy, body_color)
-    disc(10.1, 0.9 + dy, 1.0, 0.65, outline)
-    disc(10.1, 0.9 + dy, 0.6, 0.35, body_color)
-
-    # Round head with a dark rim and a shaded belly.
-    head = (9.0, 6.5, 6.5 + widen, 4.5)
-    ell(head[0], head[1], head[2] + 0.6, head[3] + 0.6, outline)
-    ell(head[0], head[1], head[2], head[3], body_color)
-    ell(head[0], head[1], head[2], head[3], shade, y_from=8.3)
-
-    # Stubby feet.
-    if legs == "walk1":
-        feet = ((5.0, 7.0, 12.6), (11.0, 13.0, 11.8))
-    elif legs == "walk2":
-        feet = ((5.0, 7.0, 11.8), (11.0, 13.0, 12.6))
-    elif legs == "tuck":
-        feet = ()
-    else:
-        feet = ((5.0, 7.0, 12.6), (11.0, 13.0, 12.6))
-    for fx0, fx1, fy1 in feet:
-        px(fx0 - 0.5 - widen * 0.5, 10.3 + dy, fx1 + 0.5 + widen * 0.5, fy1 + dy, outline)
-        px(fx0 - widen * 0.5, 10.8 + dy, fx1 + widen * 0.5, fy1 - 0.5 + dy, body_color)
-
-    # Big signature eyes.
-    look = max(-1.0, min(1.0, float(look or 0)))
-    eye_scale = 1.15 if eyes == "surprised" else 1.0
-    left_eye = (6.2 - widen * 0.5, 5.0, 2.5 * eye_scale, 2.2 * eye_scale)
-    right_eye = (11.8 + widen * 0.5, 5.0, 2.5 * eye_scale, 2.2 * eye_scale)
-
-    def eye_ball(box):
-        ecx, ecy, erx, ery = box
-        disc(ecx, ecy + dy, erx + 0.4, ery + 0.4, outline)
-        disc(ecx, ecy + dy, erx, ery, white)
-
-    def eye_pupils(box, inner=False):
-        ecx, ecy, _erx, _ery = box
-        side = 1.0 if ecx < 9.0 else -1.0
-        disc(ecx + side * 1.2 + look, ecy + dy, 0.6, 1.0, pupil)
+    look = max(-1, min(1, int(look or 0)))
 
     if eyes in ("sleep", "blink"):
-        for box in (left_eye, right_eye):
-            ecx, ecy, erx, _ery = box
-            px(ecx - erx * 0.6, ecy - 0.1 + dy, ecx + erx * 0.6, ecy + 0.5 + dy, pupil)
+        for bx0, bx1 in ((4, 7), (10, 13)):
+            painter.fillRect(bx0, 4, bx1 - bx0, 1, _qc(pupil))
     elif eyes == "happy":
-        for box in (left_eye, right_eye):
-            ecx, ecy, erx, ery = box
-            px(ecx - erx + 0.3, ecy + dy, ecx - erx + 1.1, ecy + ery - 0.4 + dy, pupil)
-            px(ecx + erx - 1.1, ecy + dy, ecx + erx - 0.3, ecy + ery - 0.4 + dy, pupil)
-            px(ecx - erx + 0.3, ecy + ery - 0.8 + dy, ecx + erx - 0.3, ecy + ery + dy, pupil)
+        for bx0, bx1 in ((3, 7), (10, 14)):
+            painter.fillRect(bx0, 4, 1, 1, _qc(pupil))
+            painter.fillRect(bx1 - 1, 4, 1, 1, _qc(pupil))
+            painter.fillRect(bx0, 5, bx1 - bx0, 1, _qc(pupil))
     elif eyes == "dizzy":
-        for box in (left_eye, right_eye):
-            eye_ball(box)
-            ecx, ecy, erx, ery = box
-            for step in range(5):
-                t = -1.6 + step * 0.8
-                px(ecx + t, ecy + t * 0.8 + dy, ecx + t + 0.8, ecy + t * 0.8 + 0.8 + dy, pupil)
-                px(ecx - t, ecy + t * 0.8 + dy, ecx - t + 0.8, ecy + t * 0.8 + 0.8 + dy, pupil)
+        for center_x in (5, 12):
+            for step in range(3):
+                painter.fillRect(center_x - 1 + step, 3 + step, 1, 1, _qc(pupil))
+                painter.fillRect(center_x + 1 - step, 3 + step, 1, 1, _qc(pupil))
     else:
-        for box in (left_eye, right_eye):
-            eye_ball(box)
-        for box in (left_eye, right_eye):
-            eye_pupils(box)
+        if eyes == "surprised":
+            painter.fillRect(5, 4, 2, 2, _qc(pupil))
+            painter.fillRect(11, 4, 2, 2, _qc(pupil))
+        else:
+            qx0 = min(max(6 + look, 4), 6)
+            painter.fillRect(qx0, 4, 2, 2, _qc(pupil))
+            qx1 = min(max(10 + look, 10), 12)
+            painter.fillRect(qx1, 4, 2, 2, _qc(pupil))
         if eyes == "angry":
-            (lx, ly, lrx, _lry), (rx, _ry, rrx, _rry) = (left_eye, right_eye)
-            px(lx - lrx - 0.2, ly - 2.6 + dy, lx - 0.5, ly - 1.8 + dy, pupil)
-            px(rx + 0.5, ly - 2.6 + dy, rx + rrx + 0.2, ly - 1.8 + dy, pupil)
-
-    # Wide toothy mouth. Asleep Om Nom keeps his mouth shut.
+            painter.fillRect(3, 3, 3, 1, _qc(pupil))
+            painter.fillRect(11, 3, 3, 1, _qc(pupil))
     if eyes == "sleep":
-        px(6.5, 8.5 + dy, 11.5, 9.3 + dy, outline)
-        px(7.0, 8.7 + dy, 11.0, 9.1 + dy, mouth_dark)
-        painter.end()
-        return QPixmap.fromImage(image)
-    my1 = 10.8 if mouth == "open" else 9.8
-    mx0, mx1, my0 = 4.0 - widen * 0.5, 14.0 + widen * 0.5, 7.8
-    px(mx0 - 0.5, my0 - 0.5 + dy, mx1 + 0.5, my1 + 0.5 + dy, outline)
-    px(mx0, my0 + dy, mx1, my1 + dy, mouth_dark)
-    for tx0, tx1 in ((5.0, 6.5), (8.2, 9.8), (11.5, 13.0)):
-        px(tx0, my0 + dy, tx1, my0 + 1.2 + dy, white)
-    for tx0, tx1 in ((6.5, 8.0), (10.0, 11.5)):
-        px(tx0, my1 - 0.7 + dy, tx1, my1 + dy, white)
+        painter.fillRect(4, 8, 10, 2, _qc(body_color))
+        painter.fillRect(6, 8, 5, 1, _qc(outline))
 
     painter.end()
-    return QPixmap.fromImage(image)
+
+    if squash > 0:
+        target_w, target_h, dx, dy = 20 * unit, 11 * unit, -unit, 2 * unit
+    elif squash < 0:
+        target_w, target_h, dx, dy = 16 * unit, 13 * unit, unit, 0
+    else:
+        target_w, target_h, dx, dy = 18 * unit, 13 * unit, 0, 0
+    if legs == "tuck":
+        dy += unit
+    if legs == "dangle":
+        dy -= unit
+    canvas = QImage(18 * unit, 13 * unit, QImage.Format.Format_ARGB32_Premultiplied)
+    canvas.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(canvas)
+    scaled = cell.scaled(
+        target_w,
+        target_h,
+        _Qt.AspectRatioMode.IgnoreAspectRatio,
+        _Qt.TransformationMode.FastTransformation,
+    )
+    painter.drawImage(dx, dy, scaled)
+    painter.end()
+    return QPixmap.fromImage(canvas)
 
 
 def render_frame(key, unit, body_color, eye_color, body_shape="claw"):
