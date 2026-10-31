@@ -92,6 +92,8 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
     painter = QPainter(image)
 
     def px(x0, y0, x1, y1, color):
+        if x1 <= x0 or y1 <= y0:
+            return
         painter.fillRect(
             int(x0 * unit),
             int(y0 * unit),
@@ -111,139 +113,96 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
     if legs == "dangle":
         dy -= 1
 
-    def row(y, x0, x1, color, edge=0):
-        px(x0 - widen - edge, y + dy, x1 + widen + edge, y + 1 + dy, color)
+    def ell(cx, cy, rx, ry, color, y_from=None, y_to=None):
+        y = cy - ry if y_from is None else max(y_from, cy - ry)
+        end_y = cy + ry if y_to is None else min(y_to, cy + ry)
+        while y < end_y - 1e-9:
+            t = (y + 0.25 - cy) / ry if ry > 0 else 0.0
+            dx = rx * (max(0.0, 1.0 - t * t) ** 0.5)
+            px(cx - dx, y + dy, cx + dx, y + 0.5 + dy, color)
+            y += 0.5
 
-    # Sprout on top of the head.
-    row(0, 7, 11, outline)
-    row(0, 8, 10, body_color)
-    row(1, 8, 10, outline)
-    row(1, 9, 10, body_color)
+    def disc(cx, cy, rx, ry, color):
+        ell(cx, cy, rx, ry, color)
 
-    # Round bean body with a dark rim and shaded belly.
-    body_rows = (
-        (2, 3, 15),
-        (3, 3, 15),
-        (4, 2, 16),
-        (5, 2, 16),
-        (6, 2, 16),
-        (7, 2, 16),
-        (8, 2, 16),
-        (9, 2, 16),
-        (10, 3, 15),
-    )
-    for y, x0, x1 in body_rows:
-        row(y, x0, x1, outline, edge=1)
-    for index, (y, x0, x1) in enumerate(body_rows):
-        fill = shade if index >= len(body_rows) - 2 else body_color
-        row(y, x0, x1, fill)
+    # Sprout: thin stem with a small leaf leaning right.
+    px(8.2, 0.8 + dy, 9.8, 2.4 + dy, outline)
+    px(8.7, 0.8 + dy, 9.3, 2.4 + dy, body_color)
+    disc(10.1, 0.9 + dy, 1.0, 0.65, outline)
+    disc(10.1, 0.9 + dy, 0.6, 0.35, body_color)
+
+    # Round head with a dark rim and a shaded belly.
+    head = (9.0, 6.5, 6.5 + widen, 4.5)
+    ell(head[0], head[1], head[2] + 0.6, head[3] + 0.6, outline)
+    ell(head[0], head[1], head[2], head[3], body_color)
+    ell(head[0], head[1], head[2], head[3], shade, y_from=8.3)
 
     # Stubby feet.
     if legs == "walk1":
-        feet = ((4, 7, 2), (11, 14, 1))
+        feet = ((5.0, 7.0, 12.6), (11.0, 13.0, 11.8))
     elif legs == "walk2":
-        feet = ((4, 7, 1), (11, 14, 2))
+        feet = ((5.0, 7.0, 11.8), (11.0, 13.0, 12.6))
     elif legs == "tuck":
         feet = ()
     else:
-        feet = ((4, 7, 2), (11, 14, 2))
-    for fx0, fx1, foot_height in feet:
-        for step in range(foot_height):
-            row(11 + step, fx0, fx1, outline, edge=1)
-        for step in range(foot_height):
-            row(11 + step, fx0, fx1, body_color)
+        feet = ((5.0, 7.0, 12.6), (11.0, 13.0, 12.6))
+    for fx0, fx1, fy1 in feet:
+        px(fx0 - 0.5 - widen * 0.5, 10.3 + dy, fx1 + 0.5 + widen * 0.5, fy1 + dy, outline)
+        px(fx0 - widen * 0.5, 10.8 + dy, fx1 + widen * 0.5, fy1 - 0.5 + dy, body_color)
 
-    # Tiny side arms.
-    def arm(side, style):
-        if style == "tuck":
-            return
-        if style == "up":
-            y0, y1 = 5, 7
-        else:
-            y0, y1 = 8, 10
-        if side < 0:
-            ax0, ax1 = 1, 3
-        else:
-            ax0, ax1 = 15, 17
-        for y in range(y0, y1):
-            row(y, ax0, ax1, outline, edge=1)
-        for y in range(y0, y1):
-            row(y, ax0, ax1, body_color)
+    # Big signature eyes.
+    look = max(-1.0, min(1.0, float(look or 0)))
+    eye_scale = 1.15 if eyes == "surprised" else 1.0
+    left_eye = (6.2 - widen * 0.5, 5.0, 2.5 * eye_scale, 2.2 * eye_scale)
+    right_eye = (11.8 + widen * 0.5, 5.0, 2.5 * eye_scale, 2.2 * eye_scale)
 
-    left_arm = right_arm = arms
-    if arms == "wave1":
-        left_arm, right_arm = "up", "normal"
-    elif arms == "wave2":
-        left_arm, right_arm = "normal", "up"
-    arm(-1, left_arm)
-    arm(1, right_arm)
+    def eye_ball(box):
+        ecx, ecy, erx, ery = box
+        disc(ecx, ecy + dy, erx + 0.4, ery + 0.4, outline)
+        disc(ecx, ecy + dy, erx, ery, white)
 
-    # Huge signature eyes.
-    look = max(-1, min(1, int(look or 0)))
-    boxes = ((3 - widen, 3, 8, 7), (10, 3, 15 + widen, 7))
-
-    def eye_rim(box):
-        bx0, by0, bx1, by1 = box
-        px(bx0 - 1, by0 - 1 + dy, bx1 + 1, by1 + 1 + dy, outline)
-
-    def eye_white(box):
-        bx0, by0, bx1, by1 = box
-        px(bx0, by0 + dy, bx1, by1 + dy, white)
-
-    def pupils(box, py0=4, py1=6):
-        bx0, _by0, bx1, _by1 = box
-        qx0 = min(max(6 + look if box[0] < 9 else 10 + look, bx0), bx1 - 2)
-        px(qx0, py0 + dy, qx0 + 2, py1 + dy, pupil)
+    def eye_pupils(box, inner=False):
+        ecx, ecy, _erx, _ery = box
+        side = 1.0 if ecx < 9.0 else -1.0
+        disc(ecx + side * 1.2 + look, ecy + 0.2 + dy, 0.7, 1.1, pupil)
 
     if eyes in ("sleep", "blink"):
-        for box in boxes:
-            bx0, _by0, bx1, _by1 = box
-            px(bx0, 4 + dy, bx1, 5 + dy, pupil)
+        for box in (left_eye, right_eye):
+            ecx, ecy, erx, _ery = box
+            px(ecx - erx + 0.3, ecy - 0.2 + dy, ecx + erx - 0.3, ecy + 0.6 + dy, pupil)
     elif eyes == "happy":
-        for box in boxes:
-            bx0, _by0, bx1, by1 = box
-            px(bx0, by1 - 2 + dy, bx0 + 1, by1 - 1 + dy, pupil)
-            px(bx1 - 1, by1 - 2 + dy, bx1, by1 - 1 + dy, pupil)
-            px(bx0, by1 - 1 + dy, bx1, by1 + dy, pupil)
+        for box in (left_eye, right_eye):
+            ecx, ecy, erx, ery = box
+            px(ecx - erx + 0.3, ecy + dy, ecx - erx + 1.1, ecy + ery - 0.4 + dy, pupil)
+            px(ecx + erx - 1.1, ecy + dy, ecx + erx - 0.3, ecy + ery - 0.4 + dy, pupil)
+            px(ecx - erx + 0.3, ecy + ery - 0.8 + dy, ecx + erx - 0.3, ecy + ery + dy, pupil)
     elif eyes == "dizzy":
-        for box in boxes:
-            eye_rim(box)
-            eye_white(box)
-            bx0, by0, bx1, by1 = box
-            for step in range(4):
-                px(bx0 + step, by0 + step + dy, bx0 + step + 1, by0 + step + 1 + dy, pupil)
-                px(bx1 - 1 - step, by0 + step + dy, bx1 - step, by0 + step + 1 + dy, pupil)
+        for box in (left_eye, right_eye):
+            eye_ball(box)
+            ecx, ecy, erx, ery = box
+            for step in range(5):
+                t = -1.6 + step * 0.8
+                px(ecx + t, ecy + t * 0.8 + dy, ecx + t + 0.8, ecy + t * 0.8 + 0.8 + dy, pupil)
+                px(ecx - t, ecy + t * 0.8 + dy, ecx - t + 0.8, ecy + t * 0.8 + 0.8 + dy, pupil)
     else:
-        for box in boxes:
-            eye_rim(box)
-        if eyes == "surprised":
-            for (bx0, by0, bx1, by1) in boxes:
-                px(bx0 - 1, by0 - 1 + dy, bx1 + 1, by1 + 1 + dy, outline)
-                px(bx0, by0 + dy, bx1, by1 + dy, white)
-            for box in boxes:
-                bx0, _by0, bx1, _by1 = box
-                cx = (bx0 + bx1) // 2
-                px(cx - 1, 4 + dy, cx + 1, 6 + dy, pupil)
-        else:
-            for box in boxes:
-                eye_white(box)
-            for box in boxes:
-                pupils(box)
+        for box in (left_eye, right_eye):
+            eye_ball(box)
+        for box in (left_eye, right_eye):
+            eye_pupils(box)
         if eyes == "angry":
-            (l0, ly0, _l1, _ly1), (_r0, _ry0, r1, _ry1) = boxes
-            px(l0 - 1, ly0 - 1 + dy, l0 + 2, ly0 + dy, pupil)
-            px(r1 - 2, ly0 - 1 + dy, r1 + 1, ly0 + dy, pupil)
+            (lx, ly, lrx, _lry), (rx, _ry, rrx, _rry) = (left_eye, right_eye)
+            px(lx - lrx - 0.2, ly - 2.6 + dy, lx - 0.5, ly - 1.8 + dy, pupil)
+            px(rx + 0.5, ly - 2.6 + dy, rx + rrx + 0.2, ly - 1.8 + dy, pupil)
 
-    # Wide toothy grin.
-    mx0, mx1, my0, my1 = 3 - widen, 15 + widen, 8, 11
-    px(mx0 - 1, my0 - 1 + dy, mx1 + 1, my1 + 1 + dy, outline)
+    # Wide toothy mouth.
+    my1 = 10.8 if mouth == "open" else 9.8
+    mx0, mx1, my0 = 4.0 - widen * 0.5, 14.0 + widen * 0.5, 7.8
+    px(mx0 - 0.5, my0 - 0.5 + dy, mx1 + 0.5, my1 + 0.5 + dy, outline)
     px(mx0, my0 + dy, mx1, my1 + dy, mouth_dark)
-    for tx in (mx0 + 1, mx0 + 5, mx0 + 9):
-        px(tx, my0 + dy, tx + 2, my0 + 1 + dy, white)
-    for tx in (mx0 + 3, mx0 + 7):
-        px(tx, my1 - 1 + dy, tx + 2, my1 + dy, white)
-    if mouth == "open":
-        px(mx0 + 4, my1 + dy, mx1 - 4, my1 + 1 + dy, mouth_dark)
+    for tx0, tx1 in ((5.0, 6.5), (8.2, 9.8), (11.5, 13.0)):
+        px(tx0, my0 + dy, tx1, my0 + 1.2 + dy, white)
+    for tx0, tx1 in ((6.5, 8.0), (10.0, 11.5)):
+        px(tx0, my1 - 0.7 + dy, tx1, my1 + dy, white)
 
     painter.end()
     return QPixmap.fromImage(image)
