@@ -13,7 +13,7 @@ A delightful pixel pet for your Windows or Linux desktop. Watch it walk, sleep, 
 - Transparent always-on-top pixel pet with smooth animations
 - Full interaction support: drag, throw, pet, and tap
 - Physics simulation: gravity, autonomous walking, sleeping, and dream bubbles
-- Six customizable color palettes and three size options
+- Seven customizable color palettes and four size options, including a round Om Nom body shape
 - Multi-language UI: English, Russian, Ukrainian
 - AI-powered chat with conversation history
 - Cloud AI mode: works with any OpenAI-compatible API endpoint

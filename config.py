@@ -45,7 +45,7 @@ ENV_KEYS = {
 }
 
 MAX_SIZE_INDEX = 3
-MAX_COLOR_INDEX = 5
+MAX_COLOR_INDEX = 6
 LANGUAGES = ("ru", "uk", "en")
 AI_MODES = ("cloud", "local")
 

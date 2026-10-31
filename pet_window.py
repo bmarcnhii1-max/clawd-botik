@@ -758,11 +758,12 @@ class PetWindow(QWidget):
         self._particles = alive
 
     def _get_frame(self, key):
-        cache_key = (key, self._unit, self._color_index)
+        shape = sprite.body_shape(self._color_index)
+        cache_key = (key, self._unit, self._color_index, shape)
         pixmap = self._frames.get(cache_key)
         if pixmap is None:
             _, body, eye = sprite.palette(self._color_index)
-            pixmap = sprite.render_frame(key, self._unit, body, eye)
+            pixmap = sprite.render_frame(key, self._unit, body, eye, shape)
             if len(self._frames) > 96:
                 self._frames.clear()
             self._frames[cache_key] = pixmap

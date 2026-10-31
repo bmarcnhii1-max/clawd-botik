@@ -29,9 +29,10 @@ sys.excepthook = log_exception
 
 
 def build_icon(config):
-    _, body, eye = sprite.palette(int(config.get("color", 0)))
+    color_index = int(config.get("color", 0))
+    _, body, eye = sprite.palette(color_index)
     key = ("open", 0, "normal", "stand", 0, False, None)
-    pixmap = sprite.render_frame(key, 8, body, eye)
+    pixmap = sprite.render_frame(key, 8, body, eye, sprite.body_shape(color_index))
     return QIcon(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation))
 
 

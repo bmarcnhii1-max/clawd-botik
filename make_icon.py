@@ -15,9 +15,10 @@ ICO_PATH = os.path.join(BASE_DIR, "clawd.ico")
 
 app = QGuiApplication([])
 config = load_config()
-_, body, eye = sprite.palette(int(config.get("color", 0)))
+color_index = int(config.get("color", 0))
+_, body, eye = sprite.palette(color_index)
 key = ("open", 0, "normal", "stand", 0, False, None)
-pixmap = sprite.render_frame(key, 13, body, eye)
+pixmap = sprite.render_frame(key, 13, body, eye, sprite.body_shape(color_index))
 
 canvas = QImage(256, 256, QImage.Format.Format_ARGB32_Premultiplied)
 canvas.fill(Qt.GlobalColor.transparent)

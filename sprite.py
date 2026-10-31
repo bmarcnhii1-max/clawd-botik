@@ -13,7 +13,10 @@ PALETTES = [
     ("Небесный", 0xFF4FA8E8, 0xFF0E1C29),
     ("Розовый", 0xFFEE85AE, 0xFF2A1220),
     ("Графит", 0xFF5E6670, 0xFFF2F2F2),
+    ("Om Nom", 0xFF58B368, 0xFF2B1B12),
 ]
+
+OMNOM_INDEX = len(PALETTES) - 1
 
 HEART_COLOR = 0xFFFF5C7A
 ZZZ_COLOR = 0xFF8FA3BF
@@ -68,11 +71,132 @@ def palette(index):
     return PALETTES[int(index) % len(PALETTES)]
 
 
+def body_shape(index):
+    return "omnom" if int(index) % len(PALETTES) == OMNOM_INDEX else "claw"
+
+
 def sprite_size(unit):
     return GRID_W * unit, GRID_H * unit
 
 
-def render_frame(key, unit, body_color, eye_color):
+def _render_omnom_frame(key, unit, body_color, eye_color):
+    eyes, look, arms, legs, squash, blush, mouth = key
+    sclera = 0xFFFDF7F2
+    blush_color = mix_color(body_color, 0xFFFF4F79, 0.45)
+    width, height = sprite_size(unit)
+    image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(image)
+
+    def px(x0, y0, x1, y1, color):
+        painter.fillRect(
+            int(x0 * unit),
+            int(y0 * unit),
+            int((x1 - x0) * unit),
+            int((y1 - y0) * unit),
+            _qc(color),
+        )
+
+    left, right, top, bottom = 3, 15, 3, 10
+    if squash > 0:
+        left, right, top = 2, 16, 5
+    elif squash < 0:
+        left, right, top = 4, 14, 2
+    if legs == "tuck":
+        top += 1
+        bottom += 1
+
+    half = (right - left) // 2
+    cx = (left + right) // 2
+    rows = max(1, bottom - top)
+    for row, y in enumerate(range(top, bottom)):
+        position = row / (rows - 1) if rows > 1 else 0.5
+        width_factor = max(0.42, 1.0 - abs(position - 0.48) * 1.08)
+        half_row = max(2, int(round(half * width_factor)))
+        px(cx - half_row, y, cx + half_row + 1, y + 1, body_color)
+
+    foot_heights = {
+        "stand": (1, 1),
+        "walk1": (2, 1),
+        "walk2": (1, 2),
+        "dangle": (2, 2),
+        "tuck": (0, 0),
+    }.get(legs, (1, 1))
+    for (x0, x1, foot_height) in ((cx - 3, cx - 1, foot_heights[0]), (cx + 1, cx + 3, foot_heights[1])):
+        if foot_height > 0:
+            px(x0, bottom, x1, bottom + foot_height, body_color)
+
+    def arm(side, style):
+        if style == "tuck":
+            return
+        if style == "up":
+            if side < 0:
+                px(left - 2, top, left - 1, top + 3, body_color)
+            else:
+                px(right + 1, top, right + 2, top + 3, body_color)
+        else:
+            y0 = top + 4
+            if side < 0:
+                px(left - 2, y0, left, y0 + 2, body_color)
+            else:
+                px(right, y0, right + 2, y0 + 2, body_color)
+
+    left_arm = right_arm = arms
+    if arms == "wave1":
+        left_arm, right_arm = "up", "normal"
+    elif arms == "wave2":
+        left_arm, right_arm = "normal", "up"
+    arm(-1, left_arm)
+    arm(1, right_arm)
+
+    ey = top + 2
+    for side, ecx in ((-1, left + 4 + look), (1, right - 5 + look)):
+        if eyes == "sleep":
+            px(ecx - 1, ey + 1, ecx + 1, ey + 2, eye_color)
+        elif eyes == "blink":
+            px(ecx - 1, ey + 1, ecx + 1, ey + 2, eye_color)
+        elif eyes == "happy":
+            px(ecx - 1, ey + 1, ecx, ey + 2, eye_color)
+            px(ecx, ey, ecx + 1, ey + 1, eye_color)
+            px(ecx + 1, ey + 1, ecx + 2, ey + 2, eye_color)
+        elif eyes == "dizzy":
+            px(ecx - 1, ey, ecx + 1, ey + 3, sclera)
+            for dx, dy in ((-1, -1), (1, -1), (0, 0), (-1, 1), (1, 1)):
+                px(ecx + dx, ey + 1 + dy, ecx + dx + 1, ey + 2 + dy, eye_color)
+        else:
+            if eyes == "surprised":
+                px(ecx - 1, ey - 1, ecx + 2, ey + 3, sclera)
+                px(ecx, ey, ecx + 1, ey + 3, eye_color)
+            else:
+                px(ecx - 1, ey, ecx + 1, ey + 3, sclera)
+                px(ecx, ey + 1, ecx + 1, ey + 3, eye_color)
+            if eyes == "angry":
+                if side < 0:
+                    px(ecx - 2, ey - 1, ecx - 1, ey, eye_color)
+                else:
+                    px(ecx + 1, ey - 1, ecx + 2, ey, eye_color)
+        if blush:
+            if side < 0:
+                px(ecx - 3, ey + 3, ecx - 1, ey + 4, blush_color)
+            else:
+                px(ecx + 1, ey + 3, ecx + 3, ey + 4, blush_color)
+
+    if mouth:
+        mx = (left + right) // 2
+        my = ey + 3
+        if mouth == "open":
+            px(mx - 2, my, mx + 2, max(my + 1, min(my + 2, bottom + 1)), eye_color)
+        else:
+            px(mx - 2, my, mx + 2, my + 1, eye_color)
+
+    painter.end()
+    return QPixmap.fromImage(image)
+
+
+def render_frame(key, unit, body_color, eye_color, body_shape="claw"):
+    if body_shape == "omnom":
+        return _render_omnom_frame(key, unit, body_color, eye_color)
+
     eyes, look, arms, legs, squash, blush, mouth = key
     blush_color = mix_color(body_color, 0xFFFF4F79, 0.5)
     width, height = sprite_size(unit)
