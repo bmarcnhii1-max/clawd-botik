@@ -164,12 +164,12 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
     def eye_pupils(box, inner=False):
         ecx, ecy, _erx, _ery = box
         side = 1.0 if ecx < 9.0 else -1.0
-        disc(ecx + side * 1.2 + look, ecy + 0.2 + dy, 0.7, 1.1, pupil)
+        disc(ecx + side * 1.2 + look, ecy + dy, 0.6, 1.0, pupil)
 
     if eyes in ("sleep", "blink"):
         for box in (left_eye, right_eye):
             ecx, ecy, erx, _ery = box
-            px(ecx - erx + 0.3, ecy - 0.2 + dy, ecx + erx - 0.3, ecy + 0.6 + dy, pupil)
+            px(ecx - erx * 0.6, ecy - 0.1 + dy, ecx + erx * 0.6, ecy + 0.5 + dy, pupil)
     elif eyes == "happy":
         for box in (left_eye, right_eye):
             ecx, ecy, erx, ery = box
@@ -194,7 +194,12 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
             px(lx - lrx - 0.2, ly - 2.6 + dy, lx - 0.5, ly - 1.8 + dy, pupil)
             px(rx + 0.5, ly - 2.6 + dy, rx + rrx + 0.2, ly - 1.8 + dy, pupil)
 
-    # Wide toothy mouth.
+    # Wide toothy mouth. Asleep Om Nom keeps his mouth shut.
+    if eyes == "sleep":
+        px(6.5, 8.5 + dy, 11.5, 9.3 + dy, outline)
+        px(7.0, 8.7 + dy, 11.0, 9.1 + dy, mouth_dark)
+        painter.end()
+        return QPixmap.fromImage(image)
     my1 = 10.8 if mouth == "open" else 9.8
     mx0, mx1, my0 = 4.0 - widen * 0.5, 14.0 + widen * 0.5, 7.8
     px(mx0 - 0.5, my0 - 0.5 + dy, mx1 + 0.5, my1 + 0.5 + dy, outline)
