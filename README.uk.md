@@ -76,6 +76,34 @@ QT_QPA_PLATFORM=xcb ./run.sh
 
 **Примітка:** `build.bat` і `setup_local_model.ps1` працюють лише на Windows. На Linux встановіть Ollama окремо через офіційний інсталятор; `config.py` та `.env` працюють однаково на всіх платформах.
 
+### Fedora / Bazzite (Atomic, Wayland, GNOME)
+
+Перевірено на **Bazzite 44** (Fedora Atomic, GNOME на Wayland, Python 3.14). Команди з `apt` вище тут **не підходять** — `apt` немає, а система незмінна (immutable), тому `rpm-ostree` заради Clawd використовувати не потрібно. PySide6 wheel містить Qt всередині; потрібні бібліотеки `libxkbcommon` / `libxcb` / `libGL` зазвичай вже є в GNOME.
+
+```bash
+git clone https://github.com/bmarcnhii1-max/clawd-botik.git
+cd clawd-botik
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+chmod +x run.sh
+QT_QPA_PLATFORM=xcb ./run.sh
+```
+
+`QT_QPA_PLATFORM=xcb` обов'язковий на Wayland для прозорості та правильного позиціювання вікна (улюбленець працює через XWayland).
+
+**Оновлення:**
+
+```bash
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+QT_QPA_PLATFORM=xcb ./run.sh
+```
+
+**Якщо улюбленець виглядає крихітним або не тієї форми:** клацніть правою кнопкою на улюбленці → **Розмір** (Маленький / Середній / **Великий** / Крихітка) та **Колір** → **Om Nom** для круглої форми Ам Няма. Значення зберігаються в `config.json` (`"size": 2` = Великий, `"color": 6` = Om Nom).
+
 ## Налаштування AI
 
 Clawd чудово працює без AI (він гулятиме, спатиме та бачитиме сни). Для чату потрібен або хмарний API, або локальна модель Ollama.
