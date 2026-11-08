@@ -26,11 +26,12 @@ jobs:
       - run: QT_QPA_PLATFORM=offscreen python -m pytest tests -q
       - name: Create icon
         run: QT_QPA_PLATFORM=offscreen python make_icon.py
-      - name: Package tar.gz
+      - name: Build executable
+        run: QT_QPA_PLATFORM=offscreen python -m PyInstaller --noconfirm --clean --onefile --windowed --name Clawd --icon clawd.ico main.py
+      - name: Package
         run: |
-          mkdir -p dist-linux/clawd
-          cp main.py pet_window.py sprite.py bubble.py dialogs.py ai_client.py config.py i18n.py phrases.py make_icon.py run.sh requirements.txt version.txt clawd-icon.png clawd.ico dist-linux/clawd/
-          tar -czf Clawd-linux.tar.gz -C dist-linux clawd
+          chmod +x dist/Clawd
+          tar -czf Clawd-linux.tar.gz -C dist Clawd
       - uses: actions/upload-artifact@v4
         with:
           name: Clawd-linux-x64
