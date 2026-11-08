@@ -24,6 +24,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
       - run: python -m py_compile ai_client.py bubble.py config.py dialogs.py i18n.py main.py make_icon.py pet_window.py phrases.py sprite.py
       - run: QT_QPA_PLATFORM=offscreen python -m pytest tests -q
+      - name: Create icon
+        run: QT_QPA_PLATFORM=offscreen python make_icon.py
       - name: Package tar.gz
         run: |
           mkdir -p dist-linux/clawd
