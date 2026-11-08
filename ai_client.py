@@ -86,11 +86,15 @@ class AIClient(QObject):
             if key:
                 headers["Authorization"] = "Bearer " + key
                 headers["X-API-Key"] = key
+            try:
+                temp = float(cfg.get("ai_temperature", 0.9) or 0.9)
+            except (TypeError, ValueError, OverflowError):
+                temp = 0.9
             payload = {
                 "model": model,
                 "messages": messages,
                 "max_tokens": max_tokens,
-                "temperature": 0.9,
+                "temperature": max(0.0, min(2.0, temp)),
             }
             if local:
                 payload["reasoning_effort"] = "none"
@@ -104,8 +108,14 @@ class AIClient(QObject):
                 reply = self._extract(response.json()) or ""
                 if not reply:
                     error = t["ai_empty"]
+            elif response.status_code in (401, 403):
+                error = "HTTP %d: invalid key" % response.status_code
+            elif response.status_code == 404:
+                error = "HTTP %d: model not found" % response.status_code
+            elif response.status_code == 429:
+                error = "HTTP %d: rate limited" % response.status_code
             else:
-                error = "HTTP %d: %s" % (response.status_code, str(response.text)[:150])
+                error = "HTTP %d" % response.status_code
         except Exception as exc:
             if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
                 conn_failed = True

@@ -38,6 +38,62 @@ def log_exception(exc_type, exc_value, exc_tb):
 sys.excepthook = log_exception
 
 
+def set_autostart(enabled):
+    exe = os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else os.path.abspath(sys.argv[0])
+    app_name = "Clawd"
+    if sys.platform.startswith("win"):
+        try:
+            import winreg
+
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_WRITE)
+            if enabled:
+                winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, f'"{exe}"')
+            else:
+                try:
+                    winreg.DeleteValue(key, app_name)
+                except OSError:
+                    pass
+            winreg.CloseKey(key)
+            return True
+        except Exception:
+            return False
+    # Linux XDG autostart
+    import pathlib
+
+    home = pathlib.Path.home()
+    autostart_dir = home / ".config" / "autostart"
+    desktop_path = autostart_dir / "clawd.desktop"
+    try:
+        if enabled:
+            autostart_dir.mkdir(parents=True, exist_ok=True)
+            desktop_path.write_text(
+                f"[Desktop Entry]\nType=Application\nName=Clawd\nExec={exe}\nX-GNOME-Autostart-enabled=true\n",
+                encoding="utf-8",
+            )
+        elif desktop_path.exists():
+            desktop_path.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def check_for_updates():
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen("https://api.github.com/repos/bmarcnhii1-max/clawd-botik/releases/latest", timeout=10) as r:
+            data = json.load(r)
+        tag = str(data.get("tag_name", "")).lstrip("v")
+        with open(os.path.join(APP_DIR, "version.txt"), encoding="utf-8") as h:
+            cur = h.read().strip().lstrip("v")
+        if tag and cur and tag != cur:
+            return f"Update available: {cur} -> {tag}"
+        return f"Up to date: {cur or tag}"
+    except Exception as exc:
+        return f"Update check failed: {type(exc).__name__}"
+
+
 def _safe_int(value, default):
     try:
         return int(value)
@@ -174,10 +230,18 @@ def main():
     pet_settings_action = QAction(t["settings"], menu)
     clear_history_action = QAction(t["clear_history"], menu)
     ai_action = QAction(t["ai_settings"], menu)
+    sleep_action = QAction(t.get("sleep_now", "Sleep now"), menu)
+    autostart_action = QAction(t.get("autostart", "Autostart"), menu)
+    autostart_action.setCheckable(True)
+    autostart_action.setChecked(bool(config.get("autostart", False)))
+    updates_action = QAction(t.get("check_updates", "Check for updates"), menu)
     quit_action = QAction(t["quit"], menu)
     menu.addAction(pet_settings_action)
     menu.addAction(clear_history_action)
     menu.addAction(ai_action)
+    menu.addAction(sleep_action)
+    menu.addAction(autostart_action)
+    menu.addAction(updates_action)
     menu.addAction(quit_action)
 
     tray.setContextMenu(menu)
@@ -205,6 +269,9 @@ def main():
         pet_settings_action.setText(t["settings"])
         clear_history_action.setText(t["clear_history"])
         ai_action.setText(t["ai_settings"])
+        sleep_action.setText(t.get("sleep_now", "Sleep now"))
+        autostart_action.setText(t.get("autostart", "Autostart"))
+        updates_action.setText(t.get("check_updates", "Check for updates"))
         quit_action.setText(t["quit"])
         menu.update()
 
@@ -315,9 +382,31 @@ def main():
     gravity_action.toggled.connect(set_gravity)
     wander_action.toggled.connect(set_wander)
     phrases_action.toggled.connect(set_phrases)
+    def do_sleep_now():
+        from PySide6.QtCore import QTimer as _QT
+
+        pet._state = "sleep"
+        pet._last_interaction = 0
+        pet._sleep_zzz_set = False
+        _QT.singleShot(100, pet._update_sleep)
+        pet._say("dream")
+
+    def do_autostart(checked):
+        config["autostart"] = bool(checked)
+        save_config(config)
+        set_autostart(bool(checked))
+
+    def do_updates():
+        msg = check_for_updates()
+        pet._say_raw(msg, 4.0)
+        show_notification(msg)
+
     pet_settings_action.triggered.connect(open_pet_settings)
     clear_history_action.triggered.connect(pet.clear_history)
     ai_action.triggered.connect(open_ai_settings)
+    sleep_action.triggered.connect(do_sleep_now)
+    autostart_action.toggled.connect(do_autostart)
+    updates_action.triggered.connect(do_updates)
     quit_action.triggered.connect(app.quit)
 
     def show_context_menu(pos):

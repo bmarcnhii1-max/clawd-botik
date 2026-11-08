@@ -14,9 +14,11 @@ PALETTES = [
     ("Розовый", 0xFFEE85AE, 0xFF2A1220),
     ("Графит", 0xFF5E6670, 0xFFF2F2F2),
     ("Om Nom", 0xFF58B368, 0xFF2B1B12),
+    ("Зимний", 0xFF7FB3D5, 0xFF1A2E3B),
+    ("Лунный", 0xFF3A445E, 0xFFE8ECF5),
 ]
 
-OMNOM_INDEX = len(PALETTES) - 1
+OMNOM_INDEX = 6
 
 HEART_COLOR = 0xFFFF5C7A
 ZZZ_COLOR = 0xFF8FA3BF
@@ -351,7 +353,49 @@ def render_frame(key, unit, body_color, eye_color, body_shape="claw"):
             px(mx - 1, my, mx + 1, my + 1, eye_color)
 
     painter.end()
-    return QPixmap.fromImage(image)
+    pix = QPixmap.fromImage(image)
+    return apply_accessory(pix, "none", unit) if False else pix
+
+
+def apply_accessory(pixmap, accessory, unit):
+    if accessory == "none" or pixmap.isNull():
+        return pixmap
+    from PySide6.QtGui import QColor as _QC
+
+    out = QPixmap(pixmap.size())
+    out.fill(_QC(0, 0, 0, 0))
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.drawPixmap(0, 0, pixmap)
+    u = float(unit)
+    if accessory == "hat":
+        painter.setBrush(_qc(0xFFE0B341))
+        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        painter.drawRoundedRect(QRectF(6.2 * u, 0.4 * u, 5.6 * u, 1.6 * u), 0.4 * u, 0.4 * u)
+        painter.drawRoundedRect(QRectF(5.4 * u, 1.7 * u, 7.2 * u, 0.7 * u), 0.3 * u, 0.3 * u)
+    elif accessory == "bow":
+        painter.setBrush(_qc(0xFFFF5C7A))
+        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        painter.drawEllipse(QRectF(7.2 * u, 0.8 * u, 1.8 * u, 1.4 * u))
+        painter.drawEllipse(QRectF(9.0 * u, 0.8 * u, 1.8 * u, 1.4 * u))
+        painter.setBrush(_qc(0xFFE0B341))
+        painter.drawEllipse(QRectF(8.4 * u, 1.0 * u, 1.2 * u, 1.0 * u))
+    painter.end()
+    return out
+
+
+def list_custom_skins(skins_dir):
+    """Return list of skin names found under assets/skins/<name>/ (each needs at least frame.png or skin.json)."""
+    import os
+
+    if not skins_dir or not os.path.isdir(skins_dir):
+        return []
+    names = []
+    for name in sorted(os.listdir(skins_dir)):
+        base = os.path.join(skins_dir, name)
+        if os.path.isdir(base) and (os.path.exists(os.path.join(base, "frame.png")) or os.path.exists(os.path.join(base, "skin.json"))):
+            names.append(name)
+    return names
 
 
 def particle_pixmap(kind, unit):

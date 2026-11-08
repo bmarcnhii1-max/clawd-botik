@@ -12,6 +12,29 @@ permissions:
   contents: read
 
 jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+      - run: python -m py_compile ai_client.py bubble.py config.py dialogs.py i18n.py main.py make_icon.py pet_window.py phrases.py sprite.py
+      - run: QT_QPA_PLATFORM=offscreen python -m pytest tests -q
+      - name: Package tar.gz
+        run: |
+          mkdir -p dist-linux/clawd
+          cp main.py pet_window.py sprite.py bubble.py dialogs.py ai_client.py config.py i18n.py phrases.py make_icon.py run.sh requirements.txt version.txt clawd-icon.png clawd.ico dist-linux/clawd/
+          tar -czf Clawd-linux.tar.gz -C dist-linux clawd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clawd-linux-x64
+          path: Clawd-linux.tar.gz
+          if-no-files-found: error
+
   build:
     runs-on: windows-latest
 

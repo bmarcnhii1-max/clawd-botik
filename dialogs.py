@@ -6,10 +6,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
@@ -54,24 +56,38 @@ QPushButton#primary:hover { background: #e2876a; }
 
 
 class ChatDialog(QDialog):
-    def __init__(self, pet_name="Clawd", parent=None, on_clear=None, lang="ru"):
+    def __init__(self, pet_name="Clawd", parent=None, on_clear=None, lang="ru", history=None):
         super().__init__(parent)
         self.on_clear = on_clear
         self.t = ui(lang)
         self.setWindowTitle(pet_name)
         self.setModal(True)
         self.setMinimumWidth(440)
+        self.setMinimumHeight(480)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.setStyleSheet(STYLE)
         self.text = ""
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(self.t["chat_title"] + pet_name))
-        self.input = QLineEdit(self)
+        self.history_view = QListWidget(self)
+        self.history_view.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self.history_view.setMinimumHeight(180)
+        layout.addWidget(self.history_view)
+        for item in (history or [])[-50:]:
+            if isinstance(item, dict) and item.get("content"):
+                role = str(item.get("role", ""))
+                content = str(item["content"])[:400]
+                self.history_view.addItem(f"{role}: {content}")
+        self.input = QPlainTextEdit(self)
         self.input.setPlaceholderText(self.t["chat_placeholder"])
+        self.input.setMaximumHeight(96)
+        self.input.setTabChangesFocus(True)
         layout.addWidget(self.input)
         buttons = QHBoxLayout()
         self.clear_button = QPushButton(self.t["chat_clear"], self)
+        self.copy_button = QPushButton(self.t.get("copy", "Copy"), self)
         buttons.addWidget(self.clear_button)
+        buttons.addWidget(self.copy_button)
         buttons.addStretch(1)
         self.cancel_button = QPushButton(self.t["cancel"], self)
         self.send_button = QPushButton(self.t["chat_send"], self)
@@ -81,17 +97,27 @@ class ChatDialog(QDialog):
         buttons.addWidget(self.send_button)
         layout.addLayout(buttons)
         self.clear_button.clicked.connect(self._clear_history)
+        self.copy_button.clicked.connect(self._copy_history)
         self.cancel_button.clicked.connect(self.reject)
         self.send_button.clicked.connect(self._submit)
-        self.input.returnPressed.connect(self._submit)
+        from PySide6.QtWidgets import QShortcut
+
+        QShortcut(self.t["chat_send"], self, activated=self._submit)
 
     def _clear_history(self):
         self.input.clear()
+        self.history_view.clear()
         if callable(self.on_clear):
             self.on_clear()
 
+    def _copy_history(self):
+        from PySide6.QtWidgets import QApplication
+
+        items = [self.history_view.item(r).text() for r in range(self.history_view.count())]
+        QApplication.clipboard().setText("\n".join(items))
+
     def _submit(self):
-        value = self.input.text().strip()
+        value = self.input.toPlainText().strip()
         if not value:
             return
         self.text = value
@@ -178,6 +204,19 @@ class PetSettingsDialog(QDialog):
         self.wander_box.setChecked(bool(config.get("wander", True)))
         self.phrases_box = QCheckBox(self.t["phrases"])
         self.phrases_box.setChecked(bool(config.get("phrases", True)))
+        self.autostart_box = QCheckBox(self.t.get("autostart", "Autostart"))
+        self.autostart_box.setChecked(bool(config.get("autostart", False)))
+        self.click_box = QCheckBox(self.t.get("click_through", "Click-through"))
+        self.click_box.setChecked(bool(config.get("click_through", False)))
+        self.mute_box = QCheckBox(self.t.get("mute", "Mute"))
+        self.mute_box.setChecked(bool(config.get("mute", False)))
+        self.opacity_spin = QDoubleSpinBox(self)
+        self.opacity_spin.setRange(0.2, 1.0)
+        self.opacity_spin.setSingleStep(0.1)
+        try:
+            self.opacity_spin.setValue(float(config.get("opacity", 1.0) or 1.0))
+        except (TypeError, ValueError, OverflowError):
+            self.opacity_spin.setValue(1.0)
 
         form.addRow(self.t["size"], self.size_combo)
         form.addRow(self.t["color"], self.color_combo)
@@ -186,6 +225,10 @@ class PetSettingsDialog(QDialog):
         form.addRow("", self.gravity_box)
         form.addRow("", self.wander_box)
         form.addRow("", self.phrases_box)
+        form.addRow("", self.autostart_box)
+        form.addRow("", self.click_box)
+        form.addRow("", self.mute_box)
+        form.addRow(self.t.get("opacity", "Opacity"), self.opacity_spin)
         layout.addLayout(form)
 
         hint = QLabel(self.t["settings_hint"], self)
@@ -215,6 +258,13 @@ class PetSettingsDialog(QDialog):
         self.config["gravity"] = bool(self.gravity_box.isChecked())
         self.config["wander"] = bool(self.wander_box.isChecked())
         self.config["phrases"] = bool(self.phrases_box.isChecked())
+        self.config["autostart"] = bool(self.autostart_box.isChecked())
+        self.config["click_through"] = bool(self.click_box.isChecked())
+        self.config["mute"] = bool(self.mute_box.isChecked())
+        try:
+            self.config["opacity"] = float(self.opacity_spin.value())
+        except (TypeError, ValueError):
+            self.config["opacity"] = 1.0
 
 
 class AISettingsDialog(QDialog):
@@ -255,9 +305,36 @@ class AISettingsDialog(QDialog):
         except (TypeError, ValueError, OverflowError):
             timeout_val = 120
         self.timeout_spin.setValue(timeout_val)
+        self.max_tokens_spin = QSpinBox(self)
+        self.max_tokens_spin.setRange(16, 4096)
+        self.max_tokens_spin.setSingleStep(16)
+        try:
+            self.max_tokens_spin.setValue(int(float(config.get("ai_max_tokens", 220) or 220)))
+        except (TypeError, ValueError, OverflowError):
+            self.max_tokens_spin.setValue(220)
+        self.temp_spin = QDoubleSpinBox(self)
+        self.temp_spin.setRange(0.0, 2.0)
+        self.temp_spin.setSingleStep(0.1)
+        try:
+            self.temp_spin.setValue(float(config.get("ai_temperature", 0.9) or 0.9))
+        except (TypeError, ValueError, OverflowError):
+            self.temp_spin.setValue(0.9)
+        self.interval_spin = QSpinBox(self)
+        self.interval_spin.setRange(5, 720)
+        try:
+            self.interval_spin.setValue(int(float(config.get("ai_thought_interval", 40) or 40)))
+        except (TypeError, ValueError, OverflowError):
+            self.interval_spin.setValue(40)
+        self.persona_combo = QComboBox(self)
+        self.persona_combo.addItem("", data="")
+        from phrases import list_persona_presets
+
+        for name in list_persona_presets(config.get("lang", "ru")):
+            self.persona_combo.addItem(name, name)
         self.persona_edit = QPlainTextEdit(str(config.get("ai_persona", "")))
         self.persona_edit.setPlaceholderText(self.t["persona_hint"])
         self.persona_edit.setFixedHeight(90)
+        self.persona_combo.currentIndexChanged.connect(self._apply_preset)
         layout.addWidget(QLabel(self.t["ai_mode_hint"]))
         form.addRow("", self.enabled_box)
         form.addRow("", self.thoughts_box)
@@ -265,8 +342,17 @@ class AISettingsDialog(QDialog):
         form.addRow(self.t["api_key"], self.key_edit)
         form.addRow(self.t["model"], self.model_edit)
         form.addRow(self.t["timeout"], self.timeout_spin)
+        form.addRow(self.t["max_tokens"], self.max_tokens_spin)
+        form.addRow(self.t["temperature"], self.temp_spin)
+        form.addRow(self.t["thought_interval"], self.interval_spin)
+        form.addRow("Persona", self.persona_combo)
         form.addRow(self.t["persona"], self.persona_edit)
         layout.addLayout(form)
+        self.test_button = QPushButton(self.t.get("test_connection", "Test connection"), self)
+        self.test_label = QLabel(self)
+        self.test_button.clicked.connect(self._test_connection)
+        layout.addWidget(self.test_button)
+        layout.addWidget(self.test_label)
 
         self.url_warning = QLabel(self)
         self.url_warning.setWordWrap(True)
@@ -304,6 +390,32 @@ class AISettingsDialog(QDialog):
         self.url_warning.setText(self.t["insecure_url"] if insecure else "")
         self.url_warning.setVisible(insecure)
 
+    def _apply_preset(self, index):
+        name = self.persona_combo.itemData(index) or ""
+        if name:
+            from phrases import get_persona_preset
+
+            text = get_persona_preset(name, self.config.get("lang", "ru"))
+            if text:
+                self.persona_edit.setPlainText(text)
+                self._set_value("ai_persona", text)
+
+    def _test_connection(self):
+        base = self.url_edit.text().strip().rstrip("/")
+        key = self.key_edit.text().strip() or str(self.config.get("ai_key", ""))
+        model = self.model_edit.text().strip() or str(self.config.get("ai_model", ""))
+        if not base or not model:
+            self.test_label.setText("✗ " + self.t.get("ai_not_configured", ""))
+            return
+        try:
+            import requests
+
+            r = requests.get(base + "/models", headers={"Authorization": f"Bearer {key}"} if key else {}, timeout=10)
+            ok = r.status_code in (200, 401, 403, 404, 422)
+            self.test_label.setText(("✓ " if ok else "✗ ") + f"HTTP {r.status_code} — {self.t.get('connection_ok', 'OK') if ok else ''}")
+        except Exception as exc:
+            self.test_label.setText("✗ " + type(exc).__name__)
+
     def _set_value(self, key, value):
         setter = getattr(self.config, "set_user_value", None)
         if callable(setter):
@@ -326,4 +438,7 @@ class AISettingsDialog(QDialog):
             self._set_if_changed("ai_key", "")
         self._set_if_changed("ai_model", self.model_edit.text().strip())
         self._set_value("ai_timeout", int(self.timeout_spin.value()))
+        self._set_value("ai_max_tokens", int(self.max_tokens_spin.value()))
+        self._set_value("ai_temperature", float(self.temp_spin.value()))
+        self._set_value("ai_thought_interval", int(self.interval_spin.value()))
         self._set_value("ai_persona", self.persona_edit.toPlainText().strip())

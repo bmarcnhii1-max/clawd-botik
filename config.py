@@ -86,10 +86,20 @@ DEFAULTS = {
     "ai_persona": "",
     "ai_timeout": 120,
     "ai_max_tokens": 220,
+    "ai_temperature": 0.9,
+    "ai_thought_interval": 40,
+    "ai_persona_override": "",
     "ai_history": [],
     "ai_thoughts": True,
     "size": 1,
     "color": 0,
+    "accessory": "none",
+    "affection": 50,
+    "opacity": 1.0,
+    "click_through": False,
+    "autostart": False,
+    "mute": False,
+    "update_check": False,
     "gravity": False,
     "wander": True,
     "phrases": True,
@@ -106,9 +116,10 @@ ENV_KEYS = {
 }
 
 MAX_SIZE_INDEX = 3
-MAX_COLOR_INDEX = 6
+MAX_COLOR_INDEX = 8
 LANGUAGES = ("ru", "uk", "en")
 AI_MODES = ("cloud", "local")
+ACCESSORIES = ("none", "hat", "bow")
 
 
 class Config(dict):
@@ -163,6 +174,22 @@ def _as_str(value, default="", limit=2000):
     return value.strip()[:limit]
 
 
+def _as_float(value, default, low, high):
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if not math.isfinite(number):
+        return default
+    if number < low:
+        return low
+    if number > high:
+        return high
+    return number
+
+
 def _as_choice(value, choices, default):
     value = _as_str(value, default)
     return value if value in choices else default
@@ -210,10 +237,20 @@ def _coerce(raw):
         "ai_persona": _as_str(data.get("ai_persona"), "", 4000),
         "ai_timeout": _as_int(data.get("ai_timeout"), DEFAULTS["ai_timeout"], 10, 600),
         "ai_max_tokens": _as_int(data.get("ai_max_tokens"), DEFAULTS["ai_max_tokens"], 16, 4096),
+        "ai_temperature": _as_float(data.get("ai_temperature"), DEFAULTS["ai_temperature"], 0.0, 2.0),
+        "ai_thought_interval": _as_int(data.get("ai_thought_interval"), DEFAULTS["ai_thought_interval"], 5, 720),
+        "ai_persona_override": _as_str(data.get("ai_persona_override"), "", 4000),
         "ai_history": _as_history(data.get("ai_history")),
         "ai_thoughts": _as_bool(data.get("ai_thoughts"), DEFAULTS["ai_thoughts"]),
         "size": _as_int(data.get("size"), DEFAULTS["size"], 0, MAX_SIZE_INDEX),
         "color": _as_int(data.get("color"), DEFAULTS["color"], 0, MAX_COLOR_INDEX),
+        "accessory": _as_choice(data.get("accessory"), ACCESSORIES, DEFAULTS["accessory"]),
+        "affection": _as_int(data.get("affection"), DEFAULTS["affection"], 0, 100),
+        "opacity": _as_float(data.get("opacity"), DEFAULTS["opacity"], 0.2, 1.0),
+        "click_through": _as_bool(data.get("click_through"), DEFAULTS["click_through"]),
+        "autostart": _as_bool(data.get("autostart"), DEFAULTS["autostart"]),
+        "mute": _as_bool(data.get("mute"), DEFAULTS["mute"]),
+        "update_check": _as_bool(data.get("update_check"), DEFAULTS["update_check"]),
         "gravity": _as_bool(data.get("gravity"), DEFAULTS["gravity"]),
         "wander": _as_bool(data.get("wander"), DEFAULTS["wander"]),
         "phrases": _as_bool(data.get("phrases"), DEFAULTS["phrases"]),

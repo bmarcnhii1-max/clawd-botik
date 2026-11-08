@@ -201,8 +201,34 @@ class PetWindow(QWidget):
         self.cfg["pos_y"] = int(self._y)
         save_config(self.cfg)
 
+    def _adjust_affection(self, delta):
+        try:
+            cur = int(float(self.cfg.get("affection", 50) or 50))
+        except (TypeError, ValueError, OverflowError):
+            cur = 50
+        nxt = max(0, min(100, cur + int(delta)))
+        if nxt != cur:
+            self.cfg["affection"] = nxt
+            save_config(self.cfg)
+        return nxt
+
+    def _apply_opacity(self):
+        try:
+            op = float(self.cfg.get("opacity", 1.0) or 1.0)
+        except (TypeError, ValueError, OverflowError):
+            op = 1.0
+        self.setWindowOpacity(max(0.2, min(1.0, op)))
+        try:
+            if self.cfg.get("click_through"):
+                self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            else:
+                self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        except Exception:
+            pass
+
     def start(self):
         self._restore_position()
+        self._apply_opacity()
         self.show_pet()
         QTimer.singleShot(700, self._greet)
 
@@ -231,6 +257,7 @@ class PetWindow(QWidget):
         self._x = center_x - self._sw / 2.0
         self._y = center_y - self._sh / 2.0
         self._clamp_to_screen()
+        self._apply_opacity()
         self.update()
 
     def _clamp_to_screen(self):
@@ -448,6 +475,7 @@ class PetWindow(QWidget):
 
     def _stroke(self):
         self._spawn_particle("heart")
+        self._adjust_affection(1)
         if random.random() < 0.25:
             self._say("pet")
 
@@ -455,6 +483,7 @@ class PetWindow(QWidget):
         self._state = "idle"
         self._set_expr("happy", 2.2)
         self._next_action = now + random.uniform(3.0, 6.0)
+        self._adjust_affection(3)
         if random.random() < 0.6:
             self._say("pet")
 
@@ -480,8 +509,10 @@ class PetWindow(QWidget):
         if len(self._recent_taps) >= 6:
             self._recent_taps = []
             self._set_expr("angry", 2.5)
+            self._adjust_affection(-3)
             self._say("annoyed")
             return
+        self._adjust_affection(-0 if now - self._last_tap > 0 else 0)
         self._squash_until = now + 0.12
         self._set_expr("surprised", 0.45)
         self._hop(self._unit * 40)
@@ -561,12 +592,13 @@ class PetWindow(QWidget):
         self._dispatch_ai(text)
 
     def _maybe_think_aloud(self, now):
+        interval = max(300.0, float(self.cfg.get("ai_thought_interval", 40) or 40) * 60.0)
         if self._next_thought <= 0.0:
-            self._next_thought = now + random.uniform(1200.0, 1800.0)
+            self._next_thought = now + random.uniform(interval * 0.5, interval * 0.75)
             return
         if now < self._next_thought:
             return
-        self._next_thought = now + random.uniform(1200.0, 2700.0)
+        self._next_thought = now + random.uniform(interval * 0.7, interval * 1.35)
         if self._state != "idle":
             return
         if not self.cfg.get("ai_thoughts", True):
@@ -614,6 +646,9 @@ class PetWindow(QWidget):
         self._dispatch_ai(self._ai_queue.pop(0))
 
     def _persona(self):
+        override = str(self.cfg.get("ai_persona_override", "") or "").strip()
+        if override:
+            return override
         text = str(self.cfg.get("ai_persona", "") or "").strip()
         return text or get_default_persona(self.language())
 
@@ -793,11 +828,14 @@ class PetWindow(QWidget):
 
     def _get_frame(self, key):
         shape = sprite.body_shape(self._color_index)
-        cache_key = (key, self._unit, self._color_index, shape)
+        accessory = str(self.cfg.get("accessory", "none") or "none")
+        cache_key = (key, self._unit, self._color_index, shape, accessory)
         pixmap = self._frames.get(cache_key)
         if pixmap is None:
             _, body, eye = sprite.palette(self._color_index)
             pixmap = sprite.render_frame(key, self._unit, body, eye, shape)
+            if hasattr(sprite, "apply_accessory"):
+                pixmap = sprite.apply_accessory(pixmap, accessory, self._unit)
             if len(self._frames) > 96:
                 self._frames.clear()
             self._frames[cache_key] = pixmap
