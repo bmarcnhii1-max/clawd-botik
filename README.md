@@ -48,62 +48,23 @@ run.bat
 
 ## Quick Start (Linux)
 
-X11 is fully tested; Wayland works through XWayland (AppIndicator extension may be needed on GNOME).
-
-### Install dependencies
+X11 fully tested; Wayland via XWayland (`QT_QPA_PLATFORM=xcb`). `build.bat`/`setup_local_model.ps1` are Windows-only (Ollama: official installer; `config.py`/`.env` are the same).
 
 ```bash
-sudo apt update
-sudo apt install -y python3-venv python3-pip libgl1 libegl1 libxcb-cursor0 \
-  libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+# Debian/Ubuntu deps (skip on Fedora/GNOME — libs already present)
+sudo apt install -y python3-venv python3-pip libgl1 libegl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+
+# Run (Bazzite 44 tested, GNOME Wayland, Python 3.14)
+git clone https://github.com/bmarcnhii1-max/clawd-botik.git && cd clawd-botik
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && chmod +x run.sh
+QT_QPA_PLATFORM=xcb ./run.sh   # without QT_QPA_PLATFORM on plain X11
+
+# Update
+git pull && pip install -r requirements.txt && ./run.sh
 ```
 
-### Run Clawd
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-chmod +x run.sh
-./run.sh
-```
-
-### Troubleshoot on Wayland
-
-If transparency, window positioning, or the tray icon misbehave:
-```bash
-QT_QPA_PLATFORM=xcb ./run.sh
-```
-
-**Note:** `build.bat` and `setup_local_model.ps1` are Windows-only. On Linux, install Ollama separately using its official installer; `config.py` and `.env` work the same way.
-
-### Fedora / Bazzite (Atomic, Wayland, GNOME)
-
-Tested on **Bazzite 44** (Fedora Atomic, GNOME on Wayland, Python 3.14). The `apt` commands above do **not** apply here — there is no `apt`, and the system is immutable, so do not use `rpm-ostree` just for Clawd. The PySide6 wheel bundles Qt; the needed `libxkbcommon` / `libxcb` / `libGL` libraries are usually already present on GNOME.
-
-```bash
-git clone https://github.com/bmarcnhii1-max/clawd-botik.git
-cd clawd-botik
-
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-chmod +x run.sh
-QT_QPA_PLATFORM=xcb ./run.sh
-```
-
-`QT_QPA_PLATFORM=xcb` is required on Wayland for transparency and correct window positioning (the pet runs through XWayland).
-
-**Updating:**
-
-```bash
-git pull
-source .venv/bin/activate
-pip install -r requirements.txt
-QT_QPA_PLATFORM=xcb ./run.sh
-```
-
-**If the pet looks tiny or has the wrong shape:** right-click the pet → **Size** (Small / Medium / **Large** / Tiny) and **Color** → **Om Nom** for the round Am Nyam shape. These are saved in `config.json` (`"size": 2` = Large, `"color": 6` = Om Nom).
+Pet tiny/wrong shape? Right-click → **Size** (Large) + **Color** → **Om Nom**.
 
 ## AI Configuration
 
