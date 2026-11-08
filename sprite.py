@@ -1,5 +1,5 @@
-from PySide6.QtCore import QRect
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
+from PySide6.QtCore import QRect, QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
 
 GRID_W = 18
 GRID_H = 13
@@ -80,100 +80,169 @@ def sprite_size(unit):
 
 
 OMNOM_MAP = (
-    ".........OGO......",
-    ".........OGO......",
-    "......OGGGGGGO....",
-    "...OWWWWGGWWWWO...",
-    "..OWWWWWGGWWWWWO..",
-    "..OWWWWWGGWWWWWO..",
-    "...OWWWWGGWWWWO...",
-    ".OOGGGGGGGGGGGGOO.",
-    "...OMWWMMMMMWWMO..",
-    "...OMMWWMMWWMMO...",
-    "...OggggggggggO...",
-    "....OGGO..OGGO....",
-    "....OOOO..OOOO....",
+    ".........GG.......",
+    "........GGGG......",
+    ".......GGGGGO.....",
+    ".....OOOOOOOO.....",
+    "...OOWWWWWWWOO....",
+    "..OWWWWWWWWWWWWO..",
+    "..OWWWWWWWWWWWWO..",
+    "..OOWWWWWWWWWWOO..",
+    "...OOWWWWWWWWO....",
+    "....OOOMMMMOOO....",
+    ".....OMMMMMSOO....",
+    "....OOO..OOO......",
+    ".....OO..OO.......",
 )
 
 
 def _render_omnom_frame(key, unit, body_color, eye_color):
-    from PySide6.QtCore import Qt as _Qt
+    from PySide6.QtCore import Qt as _Qt, QRectF
 
     eyes, look, arms, legs, squash, blush, mouth = key
-    outline = 0xFF23331F
-    mouth_dark = 0xFF2A4223
-    white = 0xFFFFFFFF
-    pupil = 0xFF1A1A1A
-    shade = mix_color(body_color, 0xFF1E3A1A, 0.22)
-    colors = {
-        "O": outline,
-        "G": body_color,
-        "g": shade,
-        "W": white,
-        "M": mouth_dark,
-    }
-    cell = QImage(18, 13, QImage.Format.Format_ARGB32_Premultiplied)
-    cell.fill(QColor(0, 0, 0, 0))
-    painter = QPainter(cell)
-    for y, row in enumerate(OMNOM_MAP):
-        for x, char in enumerate(row):
-            color = colors.get(char)
-            if color is not None:
-                painter.fillRect(x, y, 1, 1, _qc(color))
-
+    u = float(unit)
+    W = 18 * u
+    H = 13 * u
+    outline_col = _qc(0xFF2A4223)
+    outline_soft = QColor(35, 51, 31, 255)
+    body_col = _qc(body_color)
+    shade_col = _qc(mix_color(body_color, 0xFF1E3A1A, 0.22))
+    white_col = _qc(0xFFFFFFFF)
+    pupil_col = _qc(0xFF1A1A1A)
+    mouth_col = _qc(0xFF3E2A1A)
+    leaf_col = _qc(mix_color(body_color, 0xFFFFFFFF, 0.25))
     look = max(-1, min(1, int(look or 0)))
 
-    if eyes in ("sleep", "blink"):
-        for bx0, bx1 in ((4, 7), (10, 13)):
-            painter.fillRect(bx0, 4, bx1 - bx0, 1, _qc(pupil))
-    elif eyes == "happy":
-        for bx0, bx1 in ((3, 7), (10, 14)):
-            painter.fillRect(bx0, 4, 1, 1, _qc(pupil))
-            painter.fillRect(bx1 - 1, 4, 1, 1, _qc(pupil))
-            painter.fillRect(bx0, 5, bx1 - bx0, 1, _qc(pupil))
-    elif eyes == "dizzy":
-        for center_x in (5, 12):
-            for step in range(3):
-                painter.fillRect(center_x - 1 + step, 3 + step, 1, 1, _qc(pupil))
-                painter.fillRect(center_x + 1 - step, 3 + step, 1, 1, _qc(pupil))
-    else:
-        if eyes == "surprised":
-            painter.fillRect(5, 4, 2, 2, _qc(pupil))
-            painter.fillRect(11, 4, 2, 2, _qc(pupil))
-        else:
-            qx0 = min(max(6 + look, 4), 8)
-            painter.fillRect(qx0, 4, 2, 2, _qc(pupil))
-            qx1 = min(max(10 + look, 8), 12)
-            painter.fillRect(qx1, 4, 2, 2, _qc(pupil))
-        if eyes == "angry":
-            painter.fillRect(3, 3, 3, 1, _qc(pupil))
-            painter.fillRect(11, 3, 3, 1, _qc(pupil))
-    if eyes == "sleep":
-        painter.fillRect(4, 8, 10, 2, _qc(body_color))
-        painter.fillRect(6, 8, 5, 1, _qc(outline))
-
-    painter.end()
-
-    if squash > 0:
-        target_w, target_h, dx, dy = 20 * unit, 11 * unit, -unit, 2 * unit
-    elif squash < 0:
-        target_w, target_h, dx, dy = 16 * unit, 13 * unit, unit, 0
-    else:
-        target_w, target_h, dx, dy = 18 * unit, 13 * unit, 0, 0
-    if legs == "tuck":
-        dy += unit
-    if legs == "dangle":
-        dy -= unit
-    canvas = QImage(18 * unit, 13 * unit, QImage.Format.Format_ARGB32_Premultiplied)
+    canvas = QImage(int(W), int(H), QImage.Format.Format_ARGB32_Premultiplied)
     canvas.fill(QColor(0, 0, 0, 0))
     painter = QPainter(canvas)
-    scaled = cell.scaled(
-        target_w,
-        target_h,
-        _Qt.AspectRatioMode.IgnoreAspectRatio,
-        _Qt.TransformationMode.FastTransformation,
-    )
-    painter.drawImage(dx, dy, scaled)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+
+    def sq(vx, vy, vw, vh):
+        return QRectF(vx * u, vy * u, vw * u, vh * u)
+
+    # squash geometry
+    if squash > 0:
+        bw, bh = 15.0, 8.2
+        by = 2.8
+    elif squash < 0:
+        bw, bh = 13.0, 10.0
+        by = 1.8
+    else:
+        bw, bh = 14.0, 9.2
+        by = 2.2
+    bx = (18.0 - bw) / 2.0
+    foot_dy = 0.0
+    if legs == "tuck":
+        foot_dy = 0.5
+    elif legs == "dangle":
+        foot_dy = -0.5
+
+    # feet (behind body, small ovals)
+    painter.setPen(QPen(Qt.PenStyle.NoPen))
+    painter.setBrush(body_col)
+    for fx in (5.0, 10.6):
+        painter.drawEllipse(sq(fx, 11.0 + foot_dy, 2.8, 1.6))
+
+    # sprout: thin stem + single leaf (Om Nom style)
+    painter.setBrush(body_col)
+    painter.drawRect(sq(8.7, 0.6, 0.6, 1.9))
+    painter.save()
+    painter.translate(9.0 * u, 0.7 * u)
+    painter.rotate(-18)
+    painter.setBrush(leaf_col)
+    painter.drawEllipse(sq(-1.5, -0.6, 3.0, 1.2))
+    painter.restore()
+
+    # body
+    painter.setPen(QPen(Qt.PenStyle.NoPen))
+    painter.setBrush(body_col)
+    painter.drawEllipse(sq(bx, by, bw, bh))
+    # bottom shade under mouth
+    painter.setBrush(shade_col)
+    painter.save()
+    painter.setClipRect(sq(bx, by + bh * 0.55, bw, bh * 0.45))
+    painter.drawEllipse(sq(bx, by + bh * 0.55, bw, bh))
+    painter.restore()
+
+    # outline
+    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    pen = QPen(outline_soft)
+    pen.setWidth(max(1, int(0.55 * u)))
+    painter.setPen(pen)
+    painter.drawEllipse(sq(bx, by, bw, bh))
+
+    # eyes
+    ew, eh = 4.9, 3.9
+    if eyes == "surprised":
+        ew, eh = 5.4, 4.4
+    centers = [(6.4, 5.2), (11.6, 5.2)]
+    for cx, cy in centers:
+        ex, ey = cx - ew / 2, cy - eh / 2
+        if eyes in ("sleep", "blink"):
+            painter.setBrush(pupil_col)
+            painter.setPen(QPen(Qt.PenStyle.NoPen))
+            painter.drawEllipse(sq(cx - 2.2, cy - 0.28, 4.4, 0.56))
+        elif eyes == "happy":
+            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            p = QPen(outline_col)
+            p.setWidth(max(1, int(0.5 * u)))
+            p.setCapStyle(_Qt.PenCapStyle.RoundCap)
+            painter.setPen(p)
+            painter.drawArc(sq(cx - 2.2, cy - 0.9, 4.4, 2.6), 200 * 16, 140 * 16)
+        elif eyes == "dizzy":
+            painter.setBrush(white_col)
+            painter.setPen(QPen(Qt.PenStyle.NoPen))
+            painter.drawEllipse(sq(ex, ey, ew, eh))
+            kp = QPen(pupil_col)
+            kp.setWidth(max(1, int(0.55 * u)))
+            painter.setPen(kp)
+            s = 1.5
+            painter.drawLine(int((cx - s) * u), int((cy - s) * u), int((cx + s) * u), int((cy + s) * u))
+            painter.drawLine(int((cx + s) * u), int((cy - s) * u), int((cx - s) * u), int((cy + s) * u))
+        else:
+            painter.setBrush(white_col)
+            painter.setPen(QPen(Qt.PenStyle.NoPen))
+            painter.drawEllipse(sq(ex, ey, ew, eh))
+            px = cx + look * 0.65
+            py = cy - 0.35
+            pr = 1.18
+            painter.setBrush(pupil_col)
+            painter.drawEllipse(sq(px - pr, py - pr, pr * 2, pr * 2))
+            if eyes == "angry":
+                bp = QPen(outline_col)
+                bp.setWidth(max(1, int(0.7 * u)))
+                painter.setPen(bp)
+                if cx < 9:
+                    painter.drawLine(int((cx - 2.4) * u), int((cy - 2.6) * u), int((cx + 2.2) * u), int((cy - 1.6) * u))
+                else:
+                    painter.drawLine(int((cx - 2.2) * u), int((cy - 1.6) * u), int((cx + 2.4) * u), int((cy - 2.6) * u))
+
+    # mouth with teeth (closed when sleeping)
+    if eyes == "sleep":
+        pass
+    else:
+        mx, my, mw, mh = 5.0, 8.2, 8.0, 2.6
+        painter.setBrush(mouth_col)
+        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        painter.drawRoundedRect(sq(mx, my, mw, mh), 1.2 * u, 1.2 * u)
+        # teeth
+        painter.setBrush(white_col)
+        teeth = [(5.7, 8.5, 1.6, 1.0), (7.5, 8.5, 1.6, 1.0), (9.3, 8.5, 1.6, 1.0), (11.1, 8.5, 1.5, 1.0)]
+        for tx, ty, tw, th in teeth:
+            painter.drawRoundedRect(sq(tx, ty, tw, th), 0.25 * u, 0.25 * u)
+        # lower teeth hints
+        painter.setBrush(white_col)
+        painter.drawRoundedRect(sq(7.2, 10.0, 1.6, 0.55), 0.2 * u, 0.2 * u)
+        painter.drawRoundedRect(sq(9.2, 10.0, 1.6, 0.55), 0.2 * u, 0.2 * u)
+        # outline lip
+        lp = QPen(outline_soft)
+        lp.setWidth(max(1, int(0.5 * u)))
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        painter.setPen(lp)
+        painter.drawRoundedRect(sq(mx, my, mw, mh), 1.2 * u, 1.2 * u)
+
     painter.end()
     return QPixmap.fromImage(canvas)
 
