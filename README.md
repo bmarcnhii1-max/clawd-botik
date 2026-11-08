@@ -217,6 +217,17 @@ Clawd is applying to the SignPath Foundation for free code signing of Windows re
 - **Network activity** is limited to your configured API endpoint or local Ollama server only
 - **No tracking, no telemetry, no analytics**
 
+## Testing
+
+```powershell
+pip install -r requirements-dev.txt
+$env:QT_QPA_PLATFORM = "offscreen"
+python -m pytest tests -q
+python -m py_compile ai_client.py bubble.py config.py dialogs.py i18n.py main.py make_icon.py pet_window.py phrases.py sprite.py
+```
+
+Config is stored in `%APPDATA%/Clawd` (Windows) or `~/.config/clawd` (Linux); a legacy `config.json` next to the exe is still honoured for portability. Override with `--config <path>` or `CLAWD_CONFIG=<path>`.
+
 ## Contributing
 
 This is a solo hobby project. Feel free to fork and modify for personal use!

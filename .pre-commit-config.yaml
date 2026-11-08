@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.0
+    hooks:
+      - id: gitleaks
+        args: ["detect", "--source", ".", "--no-git", "-v"]
+  - repo: local
+    hooks:
+      - id: no-env
+        name: no .env / config.json staged
+        entry: python -c "import sys; bad=[f for f in sys.argv[1:] if f.endswith('.env') or f.endswith('config.json')]; print(' '.join(bad)); raise SystemExit(1 if bad else 0)"
+        language: system
+        files: ^.*(\.env$|config\.json)$
+        always_run: false

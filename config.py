@@ -9,8 +9,70 @@ if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(APP_DIR, "config.json")
-ERROR_LOG_PATH = os.path.join(APP_DIR, "clawd-error.log")
+
+
+def _user_config_dir():
+    appdata = os.environ.get("APPDATA")
+    if sys.platform.startswith("win") and appdata:
+        return os.path.join(appdata, "Clawd")
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return os.path.join(xdg, "clawd")
+    try:
+        home = os.path.expanduser("~")
+    except Exception:
+        home = APP_DIR
+    if home and os.path.isabs(home):
+        return os.path.join(home, ".config", "clawd")
+    return APP_DIR
+
+
+def _cli_config_path():
+    argv = sys.argv[1:]
+    for i, arg in enumerate(argv):
+        if arg == "--config" and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--config="):
+            return arg[len("--config=") :]
+    return ""
+
+
+def _resolve_config_path():
+    explicit = _cli_config_path() or os.environ.get("CLAWD_CONFIG", "").strip() or os.environ.get("CLAWD_CONFIG_FILE", "").strip()
+    if explicit:
+        if os.path.isabs(explicit):
+            return explicit
+        return os.path.join(APP_DIR, explicit)
+    # Backward compat: existing portable config next to exe wins; otherwise user dir.
+    legacy = os.path.join(APP_DIR, "config.json")
+    if os.path.exists(legacy):
+        return legacy
+    return os.path.join(_user_config_dir(), "config.json")
+
+
+def _resolve_error_log_path(config_path):
+    base = os.path.dirname(os.path.abspath(config_path)) or APP_DIR
+    return os.path.join(base, "clawd-error.log")
+
+
+CONFIG_PATH = _resolve_config_path()
+ERROR_LOG_PATH = _resolve_error_log_path(CONFIG_PATH)
+
+
+def get_config_path():
+    return CONFIG_PATH
+
+
+def get_error_log_path():
+    return ERROR_LOG_PATH
+
+
+def set_config_path(path):
+    """Override config path (tests / --config)."""
+    global CONFIG_PATH, ERROR_LOG_PATH
+    CONFIG_PATH = os.path.abspath(path)
+    ERROR_LOG_PATH = _resolve_error_log_path(CONFIG_PATH)
+    return CONFIG_PATH
 
 DEFAULTS = {
     "ai_enabled": True,
@@ -174,20 +236,25 @@ def _parse_env_value(raw_value):
 
 def _load_env():
     values = {}
-    path = os.path.join(APP_DIR, ".env")
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            for raw in handle:
-                line = raw.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                key = key.strip()
-                if key.startswith("export "):
-                    key = key[7:].strip()
-                values[key] = _parse_env_value(value)
-    except Exception:
-        pass
+    candidates = []
+    for cand_dir in (os.path.dirname(CONFIG_PATH), _user_config_dir(), APP_DIR):
+        pth = os.path.join(cand_dir, ".env")
+        if pth not in candidates:
+            candidates.append(pth)
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                for raw in handle:
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    if key.startswith("export "):
+                        key = key[7:].strip()
+                    values[key] = _parse_env_value(value)
+        except Exception:
+            pass
     for key, value in os.environ.items():
         if key.startswith("CLAWD_"):
             values[key] = value
@@ -226,17 +293,22 @@ def _log_save_error(exc):
         pass
 
 
-def _write_atomic(payload):
-    directory = os.path.dirname(CONFIG_PATH) or "."
+def _write_atomic(payload, target_path=None):
+    target = target_path or CONFIG_PATH
+    directory = os.path.dirname(target) or "."
+    try:
+        os.makedirs(directory, exist_ok=True)
+    except OSError:
+        pass
     fd, tmp_path = tempfile.mkstemp(prefix=".config-", suffix=".tmp", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, CONFIG_PATH)
+        os.replace(tmp_path, target)
         try:
-            os.chmod(CONFIG_PATH, 0o600)
+            os.chmod(target, 0o600)
         except OSError:
             pass
     except Exception:
@@ -270,6 +342,15 @@ def save_config(data):
             if key not in DEFAULTS:
                 unknown[key] = value
         coerced.update(unknown)
-        _write_atomic(coerced)
+        try:
+            _write_atomic(coerced)
+        except PermissionError:
+            fallback_dir = _user_config_dir()
+            if os.path.abspath(fallback_dir) != os.path.abspath(os.path.dirname(CONFIG_PATH) or "."):
+                fallback_path = os.path.join(fallback_dir, "config.json")
+                _write_atomic(coerced, fallback_path)
+                set_config_path(fallback_path)
+            else:
+                raise
     except Exception as exc:
         _log_save_error(exc)

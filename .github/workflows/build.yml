@@ -5,6 +5,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -23,6 +25,21 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
+
+      - name: Secret scan
+        run: |
+          pip install detect-secrets
+          detect-secrets scan > secrets.tmp
+          Get-Content secrets.tmp
+          if (Select-String -Path secrets.tmp -Pattern "sk-[A-Za-z0-9]{8,}") { throw "Potential secret found" }
+
+      - name: Compile check
+        run: python -m py_compile ai_client.py bubble.py config.py dialogs.py i18n.py main.py make_icon.py pet_window.py phrases.py sprite.py
+
+      - name: Tests
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          python -m pytest tests -q
 
       - name: Create icon
         run: python make_icon.py
