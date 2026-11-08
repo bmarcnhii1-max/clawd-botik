@@ -26,7 +26,6 @@ DEFAULTS = {
     "ai_max_tokens": 220,
     "ai_history": [],
     "ai_thoughts": True,
-    "ai_thoughts": True,
     "size": 1,
     "color": 0,
     "gravity": False,
@@ -151,7 +150,6 @@ def _coerce(raw):
         "ai_max_tokens": _as_int(data.get("ai_max_tokens"), DEFAULTS["ai_max_tokens"], 16, 4096),
         "ai_history": _as_history(data.get("ai_history")),
         "ai_thoughts": _as_bool(data.get("ai_thoughts"), DEFAULTS["ai_thoughts"]),
-        "ai_thoughts": _as_bool(data.get("ai_thoughts"), DEFAULTS["ai_thoughts"]),
         "size": _as_int(data.get("size"), DEFAULTS["size"], 0, MAX_SIZE_INDEX),
         "color": _as_int(data.get("color"), DEFAULTS["color"], 0, MAX_COLOR_INDEX),
         "gravity": _as_bool(data.get("gravity"), DEFAULTS["gravity"]),
@@ -162,6 +160,16 @@ def _coerce(raw):
         "pos_x": _as_coord(data.get("pos_x")),
         "pos_y": _as_coord(data.get("pos_y")),
     }
+
+
+def _parse_env_value(raw_value):
+    value = raw_value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    hash_pos = value.find(" #")
+    if hash_pos != -1:
+        value = value[:hash_pos].strip()
+    return value
 
 
 def _load_env():
@@ -177,7 +185,7 @@ def _load_env():
                 key = key.strip()
                 if key.startswith("export "):
                     key = key[7:].strip()
-                values[key] = value.strip().strip('"').strip("'")
+                values[key] = _parse_env_value(value)
     except Exception:
         pass
     for key, value in os.environ.items():
@@ -251,6 +259,17 @@ def save_config(data):
                     payload.pop(key, None)
                 else:
                     payload[key] = file_value
-        _write_atomic(_coerce(payload))
+        coerced = _coerce(payload)
+        # Preserve unknown keys (e.g. always_on_top) that _coerce drops.
+        unknown = {}
+        if isinstance(data, Config):
+            for key, value in data.file_values.items():
+                if key not in DEFAULTS:
+                    unknown[key] = value
+        for key, value in payload.items():
+            if key not in DEFAULTS:
+                unknown[key] = value
+        coerced.update(unknown)
+        _write_atomic(coerced)
     except Exception as exc:
         _log_save_error(exc)

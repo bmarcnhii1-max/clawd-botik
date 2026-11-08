@@ -21,24 +21,14 @@ if (Test-Path $modelPath) {
 
 if (-not (Test-Path $modelPath)) {
     $partPath = "$modelPath.part"
-    if (Test-Path $partPath) {
-        Remove-Item -LiteralPath $partPath -Force
-    }
     Write-Host "Downloading Gemma 4 E2B Q4_K_M (about 3.1 GB)..."
-    try {
-        & curl.exe -L --fail --retry 3 --retry-delay 2 --continue-at - -o $partPath $modelUrl
-        if ($LASTEXITCODE -ne 0) { throw "Model download failed" }
-        $size = (Get-Item -LiteralPath $partPath).Length
-        if ($size -ne $expectedSize) {
-            throw "Downloaded model has unexpected size: $size (expected $expectedSize)"
-        }
-        Move-Item -LiteralPath $partPath -Destination $modelPath
-    } catch {
-        if (Test-Path $partPath) {
-            Remove-Item -LiteralPath $partPath -Force
-        }
-        throw
+    & curl.exe -L --fail --retry 3 --retry-delay 2 --continue-at - -o $partPath $modelUrl
+    if ($LASTEXITCODE -ne 0) { throw "Model download failed" }
+    $size = (Get-Item -LiteralPath $partPath).Length
+    if ($size -ne $expectedSize) {
+        throw "Downloaded model has unexpected size: $size (expected $expectedSize)"
     }
+    Move-Item -LiteralPath $partPath -Destination $modelPath
 }
 
 Push-Location $root

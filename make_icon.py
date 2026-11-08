@@ -15,7 +15,10 @@ ICO_PATH = os.path.join(BASE_DIR, "clawd.ico")
 
 app = QGuiApplication([])
 config = load_config()
-color_index = int(config.get("color", 0))
+try:
+    color_index = int(config.get("color", 0))
+except (TypeError, ValueError, OverflowError):
+    color_index = 0
 _, body, eye = sprite.palette(color_index)
 key = ("open", 0, "normal", "stand", 0, False, None)
 pixmap = sprite.render_frame(key, 13, body, eye, sprite.body_shape(color_index))

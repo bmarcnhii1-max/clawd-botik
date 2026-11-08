@@ -1,6 +1,7 @@
 import math
 import random
 import time
+import traceback
 
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QPainter, QRegion
@@ -8,7 +9,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 import sprite
 from bubble import BubbleWindow
-from config import save_config
+from config import ERROR_LOG_PATH, save_config
 from i18n import ui
 from phrases import get_default_persona, get_phrases
 
@@ -85,6 +86,8 @@ class PetWindow(QWidget):
         self._pending_user = ""
         self._ai_inflight = False
         self._ai_queue = []
+        self._ai_generation = 0
+        self._pending_generation = 0
         self._mask_key = None
         self._state = "idle"
         self._vx = 0.0
@@ -107,8 +110,16 @@ class PetWindow(QWidget):
         self._timer.timeout.connect(self._tick)
 
     def _apply_metrics(self):
-        self._size_index = int(clamp(int(self.cfg.get("size", 1)), 0, len(sprite.SIZE_UNITS) - 1))
-        self._color_index = int(self.cfg.get("color", 0)) % len(sprite.PALETTES)
+        try:
+            size_val = int(self.cfg.get("size", 1))
+        except (TypeError, ValueError):
+            size_val = 1
+        self._size_index = int(clamp(size_val, 0, len(sprite.SIZE_UNITS) - 1))
+        try:
+            color_val = int(self.cfg.get("color", 0))
+        except (TypeError, ValueError):
+            color_val = 0
+        self._color_index = int(clamp(color_val, 0, len(sprite.PALETTES) - 1))
         self._unit = sprite.SIZE_UNITS[self._size_index]
         self._sw, self._sh = sprite.sprite_size(self._unit)
         self._margin = int(max(self._sw, self._sh) * 0.25) + 4
@@ -151,12 +162,16 @@ class PetWindow(QWidget):
         screen = QApplication.screenAt(center)
         if screen is None:
             screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return QRect(0, 0, 1920, 1080)
         return screen.availableGeometry()
 
     def _screen_geo_at(self, x, y):
         screen = QApplication.screenAt(QPoint(int(x), int(y)))
         if screen is None:
             screen = QApplication.primaryScreen()
+        if screen is None:
+            return QRect(0, 0, 1920, 1080)
         return screen.availableGeometry()
 
     def _bounds(self, geo):
@@ -171,8 +186,7 @@ class PetWindow(QWidget):
         px = self.cfg.get("pos_x")
         py = self.cfg.get("pos_y")
         if px is None or py is None:
-            screen = QApplication.primaryScreen()
-            geo = screen.availableGeometry()
+            geo = self._screen_geo_at(0, 0)
             min_x, max_x, min_y, max_y = self._bounds(geo)
             self._x = max_x - self._unit * 3
             self._y = max_y
@@ -226,7 +240,10 @@ class PetWindow(QWidget):
         self._y = clamp(self._y, min_y, max_y)
 
     def _sleep_timeout(self):
-        return max(0, int(self.cfg.get("sleep_seconds", 180) or 0))
+        try:
+            return max(0, int(float(self.cfg.get("sleep_seconds", 180) or 0)))
+        except (TypeError, ValueError, OverflowError):
+            return 180
 
     def _tick(self):
         now = time.monotonic()
@@ -249,7 +266,12 @@ class PetWindow(QWidget):
             self._step_particles(dt)
             self._refresh()
         except Exception:
-            pass
+            try:
+                with open(ERROR_LOG_PATH, "a", encoding="utf-8") as handle:
+                    handle.write("".join(traceback.format_exc()))
+                    handle.write("\n")
+            except Exception:
+                pass
 
     def _step_hop(self, dt, now):
         if not self._hop_active:
@@ -561,6 +583,7 @@ class PetWindow(QWidget):
         t = ui(self.language())
         self._ai_inflight = True
         self._thought_out = True
+        self._pending_generation = self._ai_generation
         self._pending_user = ""
         self._last_interaction = time.monotonic()
         messages = [{"role": "system", "content": self._persona()}]
@@ -570,6 +593,7 @@ class PetWindow(QWidget):
 
     def _dispatch_ai(self, text):
         self._ai_inflight = True
+        self._pending_generation = self._ai_generation
         self._pending_user = text
         self._set_expr("happy", 1.5)
         self._say_raw(
@@ -597,10 +621,19 @@ class PetWindow(QWidget):
         self._ai_inflight = False
         thought = self._thought_out
         self._thought_out = False
+        stale = self._pending_generation != self._ai_generation
         t = ui(self.language())
         visible = self.isVisible()
+        if stale:
+            self._pending_user = ""
+            if self._ai_queue:
+                QTimer.singleShot(2500, self._process_ai_queue)
+            return
         if not reply:
             if thought:
+                self._pending_user = ""
+                if self._ai_queue:
+                    QTimer.singleShot(2500, self._process_ai_queue)
                 return
             message = t["ai_prefix"] + str(error or t["no_reply"])[:140]
             if visible:
@@ -653,6 +686,7 @@ class PetWindow(QWidget):
         save_config(self.cfg)
 
     def clear_history(self):
+        self._ai_generation += 1
         self._ai_history = []
         self._pending_user = ""
         self._ai_queue.clear()
@@ -887,7 +921,8 @@ class PetWindow(QWidget):
     def mouseDoubleClickEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return
-        self._begin_press(event)
+        event.accept()
+        self._open_chat()
 
     def _begin_press(self, event):
         point = event.globalPosition().toPoint()
@@ -981,11 +1016,13 @@ class PetWindow(QWidget):
         vy = 0.0
         hist = touch["hist"]
         if len(hist) >= 2:
-            t0, x0, y0 = hist[0]
             t1, x1, y1 = hist[-1]
-            if t1 - t0 > 0.005 and now - t1 < 0.12:
-                vx = (x1 - x0) / (t1 - t0)
-                vy = (y1 - y0) / (t1 - t0)
+            recent = [h for h in hist if t1 - h[0] <= 0.12]
+            if len(recent) >= 2:
+                t0, x0, y0 = recent[0]
+                if t1 - t0 > 0.005 and now - t1 < 0.12:
+                    vx = (x1 - x0) / (t1 - t0)
+                    vy = (y1 - y0) / (t1 - t0)
         limit = 6000.0
         vx = clamp(vx, -limit, limit)
         vy = clamp(vy, -limit, limit)

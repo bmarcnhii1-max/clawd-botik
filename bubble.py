@@ -20,6 +20,7 @@ class BubbleWindow(QWidget):
     PADDING_X = 12
     PADDING_Y = 8
     MAX_TEXT_WIDTH = 260
+    MAX_TEXT_HEIGHT = 300
 
     def __init__(self):
         flags = (
@@ -33,7 +34,9 @@ class BubbleWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._text = ""
-        self._font = QFont("Segoe UI", 10)
+        self._font = QFont()
+        self._font.setFamily("Segoe UI")
+        self._font.setPointSize(10)
         self._font.setBold(True)
         self._layout = None
         self._timer = QTimer(self)
@@ -44,11 +47,15 @@ class BubbleWindow(QWidget):
         text = str(text or "").strip()
         if not text:
             return
-        self._text = text
+        self._text = text[:2000]
         self._resize_to_text()
         self.show()
         self.raise_()
-        self._timer.start(int(max(0.8, seconds) * 1000))
+        try:
+            delay = float(seconds)
+        except (TypeError, ValueError):
+            delay = 3.5
+        self._timer.start(int(max(0.8, delay) * 1000))
         self.update()
 
     def _resize_to_text(self):
@@ -74,7 +81,7 @@ class BubbleWindow(QWidget):
         bubble_height = int(y) + self.PADDING_Y * 2 + 4
         self.setFixedSize(
             max(70, min(self.MAX_TEXT_WIDTH + self.PADDING_X * 2 + 6, bubble_width)),
-            max(36, bubble_height),
+            max(36, min(self.MAX_TEXT_HEIGHT + self.PADDING_Y * 2 + 4, bubble_height)),
         )
 
     def place_near(self, pet_rect, screen_rect):

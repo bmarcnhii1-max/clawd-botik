@@ -19,6 +19,13 @@ from PySide6.QtWidgets import (
 import sprite
 from i18n import ui
 
+
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
 STYLE = """
 QDialog { background: #202225; }
 QLabel { color: #cfcfcf; font-size: 12px; }
@@ -79,6 +86,7 @@ class ChatDialog(QDialog):
         self.input.returnPressed.connect(self._submit)
 
     def _clear_history(self):
+        self.input.clear()
         if callable(self.on_clear):
             self.on_clear()
 
@@ -132,13 +140,13 @@ class PetSettingsDialog(QDialog):
 
         self.size_combo = QComboBox(self)
         self.size_combo.addItems(self.t["sizes"])
-        size_index = int(config.get("size", 1))
+        size_index = _safe_int(config.get("size", 1), 1)
         self.size_combo.setCurrentIndex(size_index if 0 <= size_index < len(sprite.SIZE_UNITS) else 1)
 
         self.color_combo = QComboBox(self)
         for index, (_name, body, _eye) in enumerate(sprite.PALETTES):
             self.color_combo.addItem(color_icon(body), self.t["colors"][index])
-        color_index = int(config.get("color", 0))
+        color_index = _safe_int(config.get("color", 0), 0)
         self.color_combo.setCurrentIndex(color_index if 0 <= color_index < len(sprite.PALETTES) else 0)
 
         self.lang_combo = QComboBox(self)
@@ -149,12 +157,19 @@ class PetSettingsDialog(QDialog):
         self.sleep_combo = QComboBox(self)
         for key, seconds in self.SLEEP_ITEMS:
             self.sleep_combo.addItem(self.t[key], seconds)
-        sleep_value = int(config.get("sleep_seconds", 180) or 0)
+        try:
+            sleep_value = int(float(config.get("sleep_seconds", 180) or 0))
+        except (TypeError, ValueError, OverflowError):
+            sleep_value = 180
         sleep_index = 1
         for index, (_key, seconds) in enumerate(self.SLEEP_ITEMS):
             if seconds == sleep_value:
                 sleep_index = index
                 break
+        else:
+            if sleep_value != 180:
+                self.sleep_combo.addItem("%s с" % sleep_value, sleep_value)
+                sleep_index = self.sleep_combo.count() - 1
         self.sleep_combo.setCurrentIndex(sleep_index)
 
         self.gravity_box = QCheckBox(self.t["gravity"])
@@ -192,8 +207,11 @@ class PetSettingsDialog(QDialog):
     def apply_to_config(self):
         self.config["size"] = self.size_combo.currentIndex()
         self.config["color"] = self.color_combo.currentIndex()
-        self.config["lang"] = self.lang_combo.currentData()
-        self.config["sleep_seconds"] = int(self.sleep_combo.currentData())
+        self.config["lang"] = self.lang_combo.currentData() or "ru"
+        try:
+            self.config["sleep_seconds"] = int(self.sleep_combo.currentData() or 0)
+        except (TypeError, ValueError):
+            self.config["sleep_seconds"] = 180
         self.config["gravity"] = bool(self.gravity_box.isChecked())
         self.config["wander"] = bool(self.wander_box.isChecked())
         self.config["phrases"] = bool(self.phrases_box.isChecked())
@@ -232,7 +250,11 @@ class AISettingsDialog(QDialog):
         self.timeout_spin.setRange(10, 600)
         self.timeout_spin.setSingleStep(10)
         self.timeout_spin.setSuffix(self.t["timeout_suffix"])
-        self.timeout_spin.setValue(int(config.get("ai_timeout", 120) or 120))
+        try:
+            timeout_val = int(float(config.get("ai_timeout", 120) or 120))
+        except (TypeError, ValueError, OverflowError):
+            timeout_val = 120
+        self.timeout_spin.setValue(timeout_val)
         self.persona_edit = QPlainTextEdit(str(config.get("ai_persona", "")))
         self.persona_edit.setPlaceholderText(self.t["persona_hint"])
         self.persona_edit.setFixedHeight(90)
@@ -274,7 +296,7 @@ class AISettingsDialog(QDialog):
                 host = (parts.hostname or "").lower()
                 insecure = (
                     parts.scheme == "http"
-                    and host not in ("localhost", "127.0.0.1", "::1", "0.0.0.0")
+                    and host not in ("localhost", "127.0.0.1", "::1")
                     and not host.startswith("127.")
                 )
             except ValueError:

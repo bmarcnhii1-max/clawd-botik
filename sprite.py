@@ -4,7 +4,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 GRID_W = 18
 GRID_H = 13
 
-SIZE_UNITS = [6, 8, 10, 4]
+SIZE_UNITS = [6, 8, 10, 12]
 
 PALETTES = [
     ("Claude", 0xFFD97757, 0xFF1A1A1A),
@@ -141,9 +141,9 @@ def _render_omnom_frame(key, unit, body_color, eye_color):
             painter.fillRect(5, 4, 2, 2, _qc(pupil))
             painter.fillRect(11, 4, 2, 2, _qc(pupil))
         else:
-            qx0 = min(max(6 + look, 4), 6)
+            qx0 = min(max(6 + look, 4), 8)
             painter.fillRect(qx0, 4, 2, 2, _qc(pupil))
-            qx1 = min(max(10 + look, 10), 12)
+            qx1 = min(max(10 + look, 8), 12)
             painter.fillRect(qx1, 4, 2, 2, _qc(pupil))
         if eyes == "angry":
             painter.fillRect(3, 3, 3, 1, _qc(pupil))

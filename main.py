@@ -19,8 +19,18 @@ SINGLE_INSTANCE_NAME = "ClawdDesktopPet"
 
 def log_exception(exc_type, exc_value, exc_tb):
     try:
-        with open(os.path.join(APP_DIR, "clawd-error.log"), "a", encoding="utf-8") as handle:
+        path = os.path.join(APP_DIR, "clawd-error.log")
+        try:
+            if os.path.exists(path) and os.path.getsize(path) > 1_000_000:
+                os.replace(path, path + ".1")
+        except OSError:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        with open(path, "a", encoding="utf-8") as handle:
             handle.write("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+            handle.write("\n")
     except Exception:
         pass
 
@@ -28,8 +38,15 @@ def log_exception(exc_type, exc_value, exc_tb):
 sys.excepthook = log_exception
 
 
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
 def build_icon(config):
-    color_index = int(config.get("color", 0))
+    color_index = _safe_int(config.get("color", 0), 0)
     _, body, eye = sprite.palette(color_index)
     key = ("open", 0, "normal", "stand", 0, False, None)
     pixmap = sprite.render_frame(key, 8, body, eye, sprite.body_shape(color_index))
@@ -51,8 +68,10 @@ def main():
         return
 
     server = QLocalServer(app)
-    QLocalServer.removeServer(SINGLE_INSTANCE_NAME)
-    server.listen(SINGLE_INSTANCE_NAME)
+    if not server.listen(SINGLE_INSTANCE_NAME):
+        QLocalServer.removeServer(SINGLE_INSTANCE_NAME)
+        if not server.listen(SINGLE_INSTANCE_NAME):
+            return
 
     config = load_config()
     ai = AIClient(config)
@@ -93,7 +112,7 @@ def main():
     for index, label in enumerate(t["sizes"]):
         action = QAction(label, size_menu)
         action.setCheckable(True)
-        action.setChecked(index == int(config.get("size", 1)))
+        action.setChecked(index == _safe_int(config.get("size", 1), 1))
         size_group.addAction(action)
         size_menu.addAction(action)
         size_actions.append(action)
@@ -105,7 +124,7 @@ def main():
     for index, palette in enumerate(sprite.PALETTES):
         action = QAction(color_icon(palette[1]), t["colors"][index], color_menu)
         action.setCheckable(True)
-        action.setChecked(index == int(config.get("color", 0)))
+        action.setChecked(index == _safe_int(config.get("color", 0), 0))
         color_group.addAction(action)
         color_menu.addAction(action)
         color_actions.append(action)
@@ -191,9 +210,9 @@ def main():
 
     def sync_menu():
         retranslate()
-        size_index = max(0, min(len(size_actions) - 1, int(config.get("size", 1))))
+        size_index = max(0, min(len(size_actions) - 1, _safe_int(config.get("size", 1), 1)))
         size_actions[size_index].setChecked(True)
-        color_index = max(0, min(len(color_actions) - 1, int(config.get("color", 0))))
+        color_index = max(0, min(len(color_actions) - 1, _safe_int(config.get("color", 0), 0)))
         color_actions[color_index].setChecked(True)
         lang_actions[pet.language()].setChecked(True)
         mode = str(config.get("ai_mode", "cloud"))

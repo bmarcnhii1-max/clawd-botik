@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, Signal
 
 from i18n import ui
 
-_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def _is_loopback(base_url):
@@ -94,7 +94,11 @@ class AIClient(QObject):
             }
             if local:
                 payload["reasoning_effort"] = "none"
-            timeout = max(5, min(600, int(cfg.get("ai_timeout", 120) or 120)))
+            try:
+                raw_timeout = cfg.get("ai_timeout", 120)
+                timeout = max(5, min(600, int(float(raw_timeout or 120))))
+            except (TypeError, ValueError, OverflowError):
+                timeout = 120
             response = requests.post(url, json=payload, headers=headers, timeout=timeout)
             if response.status_code == 200:
                 reply = self._extract(response.json()) or ""
@@ -103,7 +107,7 @@ class AIClient(QObject):
             else:
                 error = "HTTP %d: %s" % (response.status_code, str(response.text)[:150])
         except Exception as exc:
-            if isinstance(exc, requests.exceptions.ConnectionError):
+            if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
                 conn_failed = True
                 if local:
                     error = t["ai_local_down"].format(base=base or "?")
@@ -115,12 +119,22 @@ class AIClient(QObject):
 
     @staticmethod
     def _extract(data):
+        if not isinstance(data, dict):
+            return None
         choices = data.get("choices") or []
         if not choices:
             return None
+        if not isinstance(data, dict):
+            return None
         choice = choices[0] or {}
+        if not isinstance(choice, dict):
+            return None
         message = choice.get("message") or {}
+        if not isinstance(message, dict):
+            message = {}
         content = message.get("content")
+        if isinstance(content, dict):
+            content = content.get("text") or content.get("content") or ""
         if isinstance(content, list):
             parts = []
             for part in content:
