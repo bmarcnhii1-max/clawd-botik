@@ -32,10 +32,45 @@ jobs:
         run: |
           chmod +x dist/Clawd
           tar -czf Clawd-linux.tar.gz -C dist Clawd
+      - name: Build AppImage
+        run: |
+          chmod +x dist/Clawd
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
+          cat > AppDir/Clawd.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Clawd
+          Comment=Desktop pixel pet
+          Exec=Clawd
+          Icon=clawd
+          Categories=Utility;
+          Terminal=false
+          EOF
+          cp AppDir/Clawd.desktop AppDir/usr/share/applications/
+          cp clawd-icon.png AppDir/Clawd.png
+          cp clawd-icon.png AppDir/clawd.png
+          cp clawd-icon.png AppDir/usr/share/icons/hicolor/256x256/apps/clawd.png
+          cp dist/Clawd AppDir/usr/bin/Clawd
+          chmod +x AppDir/usr/bin/Clawd
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/bash
+          exec "$(dirname "$0")/usr/bin/Clawd" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          curl -fL -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool.AppImage
+          sudo apt-get install -y fuse libfuse2 || true
+          ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run AppDir Clawd-x86_64.AppImage
+          ls -lh Clawd-x86_64.AppImage
       - uses: actions/upload-artifact@v4
         with:
           name: Clawd-linux-x64
           path: Clawd-linux.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clawd-linux-AppImage
+          path: Clawd-x86_64.AppImage
           if-no-files-found: error
 
   build:
